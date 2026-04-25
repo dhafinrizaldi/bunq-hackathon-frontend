@@ -114,13 +114,21 @@ export function adaptSplitRequestToApiPayload(
   items: ReceiptItem[],
   assignments: Record<string, string[]>
 ): ApiCreateSessionPayload {
+  const participantList = req.participants
+    .map(p => {
+      const email = participantEmails[p.contactId];
+      if (!email) return null;
+      return { email, amount: centsToDecimalString(p.amount) };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null);
+
   return {
-    // TODO: CONFIRM-BACKEND Q5 — confirm transaction_id is an integer
-    transaction_id: parseInt(req.transactionId, 10),
-    participant_emails: req.participants
-      .map(p => participantEmails[p.contactId])
-      .filter((e): e is string => Boolean(e)),
-    // TODO: CONFIRM-BACKEND Q5 — confirm user_prompt is the right field name
+    transaction_id: req.transactionId,
+    merchant_name: req.transactionMerchantName,
+    total_amount: centsToDecimalString(Math.round(req.transactionAmount * 100)),
+    currency: req.transactionCurrency,
+    participant_emails: participantList.map(p => p.email),
+    participants: participantList,
     user_prompt: req.note,
     items: items.map(item => {
       const assignedIds = assignments[item.id] ?? [];
@@ -134,7 +142,6 @@ export function adaptSplitRequestToApiPayload(
         quantity: item.quantity,
         allocations: assignedIds.map((contactId, i) => ({
           participant_email: participantEmails[contactId] ?? '',
-          // TODO: CONFIRM-BACKEND Q5 — does backend accept per-person shares, or does it compute them?
           allocated_amount: centsToDecimalString(shares[i] ?? 0),
         })),
       };

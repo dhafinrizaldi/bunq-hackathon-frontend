@@ -153,6 +153,9 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
       await api.createSplitRequest(
         {
           transactionId: transaction.id,
+          transactionMerchantName: transaction.merchantName,
+          transactionAmount: transaction.amount,
+          transactionCurrency: transaction.currency ?? 'EUR',
           mode: 'specify',
           participants,
           note: note.trim() || undefined,

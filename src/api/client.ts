@@ -12,7 +12,7 @@ import {
   adaptSessionDetailToPendingSplit,
   adaptSplitRequestToApiPayload,
 } from "../lib/adapters";
-import axios from "axios";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { api } from ".";
 
 // ─── Feature flags ─────────────────────────────────────────────────
@@ -23,18 +23,17 @@ const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000';
 const MCP_BASE = process.env.EXPO_PUBLIC_MCP_BASE ?? 'http://localhost:8001';
 
 // ─── Auth ──────────────────────────────────────────────────────────
-// TODO: CONFIRM-BACKEND Q1 — what's the auth scheme? Bearer token? Cookie?
+
+const AUTH_TOKEN_KEY = 'auth_access_token';
+
+async function getAuthToken(): Promise<string | null> {
+  return AsyncStorage.getItem(AUTH_TOKEN_KEY);
+}
 
 type UserAuth = {
   email: string;
   password: string;
 };
-
-
-
-async function getAuthToken(): Promise<string | null> {
-  return null;
-}
 
 export const loginUser = async (data: UserAuth) => {
   if (!USE_REAL_API) {
@@ -42,6 +41,9 @@ export const loginUser = async (data: UserAuth) => {
     return { email: data.email };
   }
   const resp = await api.post("auth/login/", data);
+  if (resp.data?.access_token) {
+    await AsyncStorage.setItem(AUTH_TOKEN_KEY, resp.data.access_token);
+  }
   return resp.data;
 };
 
@@ -74,6 +76,9 @@ const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 // ─── Exported request shape ────────────────────────────────────────
 export interface SplitRequest {
   transactionId: string;
+  transactionMerchantName: string;
+  transactionAmount: number;  // full amount in cents
+  transactionCurrency: string;
   mode: "even" | "specify";
   participants: Array<{
     contactId: string;
@@ -88,7 +93,7 @@ export interface SplitRequest {
 
 export async function getSessions(): Promise<PendingSplit[]> {
   if (!USE_REAL_API) return mockGetSessions();
-  const data = await apiFetch<ApiSessionSummary[]>("/sessions/");
+  const data = await apiFetch<ApiSessionSummary[]>("/splits/");
   return data.map(adaptSessionSummaryToPendingSplit);
 }
 
@@ -97,7 +102,7 @@ export async function getSessionDetail(
   currentUserEmail: string = mockUser.email,
 ): Promise<PendingSplit> {
   if (!USE_REAL_API) return mockGetSessionDetail(id);
-  const data = await apiFetch<ApiSessionDetail>(`/sessions/${id}/`);
+  const data = await apiFetch<ApiSessionDetail>(`/splits/${id}/`);
   return adaptSessionDetailToPendingSplit(data, currentUserEmail);
 }
 
@@ -163,7 +168,7 @@ export async function createSplitRequest(
     items,
     assignments,
   );
-  const data = await apiFetch<ApiSessionDetail>("/sessions/", {
+  const data = await apiFetch<ApiSessionDetail>("/splits/", {
     method: "POST",
     body: JSON.stringify(apiPayload),
   });
@@ -273,7 +278,7 @@ export async function getMonetaryAccounts(): Promise<MonetaryAccount[]> {
     await delay(300);
     return [{ id: 'acc-1', description: 'Main', balance: 234567, currency: 'EUR' }];
   }
-  return apiFetch<MonetaryAccount[]>('/monetary-accounts');
+  return apiFetch<MonetaryAccount[]>('/monetary_accounts/');
 }
 
 // TODO: CONFIRM-BACKEND — bunq /request_inqs response shape; field names may differ
@@ -283,7 +288,7 @@ export async function getNetBalance(): Promise<{ owedToYou: number; youOwe: numb
     return { owedToYou: 4750, youOwe: 0 };
   }
   type Inquiry = { type: string; status: string; amount_inquired: { value: string } };
-  const data = await apiFetch<Inquiry[]>('/request_inqs');
+  const data = await apiFetch<Inquiry[]>('/request-inquiry/');
   const owedToYou = data
     .filter(r => r.type === 'payee' && r.status === 'pending')
     .reduce((sum, r) => sum + Math.round(parseFloat(r.amount_inquired.value) * 100), 0);

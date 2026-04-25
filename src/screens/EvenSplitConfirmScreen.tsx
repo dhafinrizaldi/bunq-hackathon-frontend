@@ -104,10 +104,13 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
       await api.createSplitRequest(
         {
           transactionId: transaction.id,
+          transactionMerchantName: transaction.merchantName,
+          transactionAmount: transaction.amount,
+          transactionCurrency: transaction.currency ?? 'EUR',
           mode: 'even',
           participants: split.contactShares.map(({ contact, amountCents }) => ({
             contactId: contact.id,
-            amount: amountCents, // cents, consistent with specify split
+            amount: amountCents,
           })),
           note: note.trim() || undefined,
         },

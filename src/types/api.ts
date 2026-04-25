@@ -66,12 +66,18 @@ export interface ApiCreateItem {
   allocations: ApiCreateAllocation[];
 }
 
+export interface ApiCreateParticipant {
+  email: string;
+  amount: string;  // decimal string, cents converted to euros
+}
+
 export interface ApiCreateSessionPayload {
-  // TODO: CONFIRM-BACKEND Q1 — auth scheme (bearer token? cookie?)
-  // TODO: CONFIRM-BACKEND Q5 — confirm exact POST field names before shipping
-  transaction_id: number;
+  transaction_id: string;
+  merchant_name: string;
+  total_amount: string;    // decimal string
+  currency: string;
   participant_emails: string[];
+  participants: ApiCreateParticipant[];
   user_prompt?: string;
   items: ApiCreateItem[];
-  // TODO: CONFIRM-BACKEND Q6 — receipt image: base64 in body, multipart, or separate upload?
 }
