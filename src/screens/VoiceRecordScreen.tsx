@@ -17,10 +17,49 @@ import type { SplitFlowParamList } from '../navigation/types';
 import { useSplitFlow } from '../context/SplitFlowContext';
 import { mockUser } from '../mocks/mockUser';
 import * as api from '../api/client';
+import { TextSplitModal } from '../components/TextSplitModal';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'VoiceRecord'>;
 
-type RecordState = 'idle' | 'recording' | 'processing' | 'transcript_preview' | 'error' | 'permission_denied';
+// idle → recording → transcribing → transcript_ready → understanding → (navigate)
+//                                                     ↘ (cancel) → idle
+// any step → error
+type RecordState =
+  | 'idle'
+  | 'recording'
+  | 'transcribing'
+  | 'transcript_ready'
+  | 'understanding'
+  | 'error_stt'
+  | 'error_mcp'
+  | 'permission_denied';
+
+const recordingOptions: Audio.RecordingOptions = {
+  isMeteringEnabled: false,
+  android: {
+    extension: '.m4a',
+    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+    audioEncoder: Audio.AndroidAudioEncoder.AAC,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 64000,
+  },
+  ios: {
+    extension: '.m4a',
+    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+    audioQuality: Audio.IOSAudioQuality.MEDIUM,
+    sampleRate: 16000,
+    numberOfChannels: 1,
+    bitRate: 64000,
+    linearPCMBitDepth: 16,
+    linearPCMIsBigEndian: false,
+    linearPCMIsFloat: false,
+  },
+  web: {
+    mimeType: 'audio/webm',
+    bitsPerSecond: 64000,
+  },
+};
 
 const NUM_BARS = 8;
 const MAX_RECORDING_SECONDS = 60;
@@ -35,16 +74,18 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [transcript, setTranscript] = useState<string | null>(null);
   const [contacts, setContacts] = useState(selectedContacts);
+  const [showTextModal, setShowTextModal] = useState(false);
 
   const recordingRef = useRef<Audio.Recording | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Set to true when user cancels during transcript_ready to abort the MCP call
+  const cancelledRef = useRef(false);
 
   const bars = useRef(
     Array.from({ length: NUM_BARS }, () => new Animated.Value(0.15))
   ).current;
 
-  // For even mode, we need to load contacts since we skip ContactPicker
   useEffect(() => {
     if (mode === 'even') {
       api.getContacts().then(setContacts);
@@ -122,7 +163,7 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
     });
 
     const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync(Audio.RecordingOptionsPresets.HIGH_QUALITY);
+    await recording.prepareToRecordAsync(recordingOptions);
     await recording.startAsync();
 
     recordingRef.current = recording;
@@ -137,51 +178,85 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
 
     stopTimer();
     stopWaveAnimation();
-    setRecordState('processing');
+
+    const recording = recordingRef.current;
+    if (!recording) return;
 
     try {
-      const recording = recordingRef.current;
-      if (recording) {
-        await recording.stopAndUnloadAsync();
-        await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-        const uri = recording.getURI() ?? '';
-        recordingRef.current = null;
+      await recording.stopAndUnloadAsync();
+      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
+      const uri = recording.getURI() ?? '';
+      recordingRef.current = null;
 
-        const { transcript: t } = await api.transcribeAudio(uri);
-        const contextContacts = mode === 'even' ? contacts : selectedContacts;
-        const parsed = await api.parseSplitFromTranscript(t, {
-          mode,
-          contacts: contextContacts,
-          items: mode === 'specify' ? items : undefined,
-          currentUserId: mockUser.id,
+      await processAudio(uri);
+    } catch {
+      setRecordState('error_stt');
+    }
+  };
+
+  const processAudio = async (uri: string) => {
+    // Step 1: transcribe
+    setRecordState('transcribing');
+    let t: string;
+    try {
+      const result = await api.transcribeAudio(uri);
+      t = result.transcript;
+    } catch {
+      setRecordState('error_stt');
+      return;
+    }
+
+    // Brief transcript preview — user can cancel before MCP fires
+    setTranscript(t);
+    setRecordState('transcript_ready');
+    cancelledRef.current = false;
+
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    if (cancelledRef.current) return;
+
+    // Step 2: parse via MCP
+    await processParsing(t);
+  };
+
+  const processParsing = async (t: string) => {
+    setRecordState('understanding');
+    const contextContacts = mode === 'even' ? contacts : selectedContacts;
+
+    try {
+      const parsed = await api.parseSplitFromTranscript(t, {
+        mode,
+        contacts: contextContacts,
+        items: mode === 'specify' ? items : undefined,
+        currentUserId: mockUser.id,
+        merchantName: transaction?.merchantName,
+        totalAmount: transaction?.amount,
+      });
+
+      if (parsed === null) {
+        setRecordState('error_mcp');
+        return;
+      }
+
+      if (parsed.mode === 'even') {
+        const otherIds = parsed.participantIds.filter(id => id !== mockUser.id);
+        navigation.navigate('EvenSplitConfirm', {
+          transactionId,
+          selectedContactIds: otherIds,
+          voiceWasUsed: true,
+          lastTranscript: t,
         });
-
-        if (parsed === null) {
-          setRecordState('error');
-          return;
-        }
-
-        setTranscript(t);
-        setRecordState('transcript_preview');
-
-        setTimeout(() => {
-          if (parsed.mode === 'even') {
-            const otherIds = parsed.participantIds.filter(id => id !== mockUser.id);
-            navigation.navigate('EvenSplitConfirm', {
-              transactionId,
-              selectedContactIds: otherIds,
-              voiceWasUsed: true,
-              lastTranscript: t,
-            });
-          } else {
-            dispatch({ type: 'SET_VOICE_DRAFT', assignments: parsed.assignments, transcript: t });
-            navigation.navigate('ItemAssignment');
-          }
-        }, 1000);
+      } else {
+        dispatch({ type: 'SET_VOICE_DRAFT', assignments: parsed.assignments, transcript: t });
+        navigation.navigate('ItemAssignment');
       }
     } catch {
-      setRecordState('error');
+      setRecordState('error_mcp');
     }
+  };
+
+  const handleCancelTranscript = () => {
+    cancelledRef.current = true;
+    handleReset();
   };
 
   const handleReset = () => {
@@ -196,6 +271,12 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
     } else {
       navigation.navigate('ItemAssignment');
     }
+  };
+
+  const handleTextSubmit = (typed: string) => {
+    setShowTextModal(false);
+    setTranscript(typed);
+    processParsing(typed);
   };
 
   const handleClose = () => navigation.getParent()?.goBack();
@@ -215,7 +296,12 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
     : '"Split this between me, Tom, and Anna"';
 
   const isRecording = recordState === 'recording';
-  const isProcessing = recordState === 'processing';
+  const isProcessing = recordState === 'transcribing' || recordState === 'understanding';
+  const showButton = !isProcessing
+    && recordState !== 'transcript_ready'
+    && recordState !== 'error_stt'
+    && recordState !== 'error_mcp'
+    && recordState !== 'permission_denied';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -237,7 +323,7 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
 
       {/* Main area */}
       <View style={styles.main}>
-        {/* Waveform bars */}
+        {/* Waveform */}
         <View style={styles.waveform}>
           {bars.map((bar, i) => (
             <Animated.View
@@ -255,8 +341,8 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
           ))}
         </View>
 
-        {/* Record / Stop / Spinner button */}
-        {!isProcessing && recordState !== 'transcript_preview' && recordState !== 'error' && recordState !== 'permission_denied' && (
+        {/* Record / Stop button */}
+        {showButton && (
           <Pressable
             style={({ pressed }) => [
               styles.recordButton,
@@ -264,6 +350,8 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
               { opacity: pressed ? 0.85 : 1 },
             ]}
             onPress={isRecording ? handleStopRecording : handleStartRecording}
+            onLongPress={() => !isRecording && setShowTextModal(true)}
+            delayLongPress={600}
           >
             <Ionicons
               name={isRecording ? 'stop' : 'mic'}
@@ -273,18 +361,31 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
           </Pressable>
         )}
 
+        {/* Two-step processing indicator */}
         {isProcessing && (
           <View style={styles.processingContainer}>
             <View style={styles.processingSpinner}>
               <Ionicons name="sync" size={32} color={theme.colors.accentPrimary} />
             </View>
-            <Text style={styles.processingText}>Understanding…</Text>
+            <View style={styles.stepDots}>
+              <View style={[
+                styles.stepDot,
+                styles.stepDotFilled, // step 1 always filled once processing starts
+              ]} />
+              <View style={[
+                styles.stepDot,
+                recordState === 'understanding' && styles.stepDotFilled,
+              ]} />
+            </View>
+            <Text style={styles.processingText}>
+              {recordState === 'transcribing' ? 'Transcribing…' : 'Understanding…'}
+            </Text>
           </View>
         )}
 
         {/* Status text */}
         {recordState === 'idle' && (
-          <Text style={styles.statusText}>Tap to start recording</Text>
+          <Text style={styles.statusText}>Tap to start · Long-press to type</Text>
         )}
         {recordState === 'recording' && (
           <Text style={styles.statusText}>
@@ -293,10 +394,20 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
               : `${formatTime(elapsedSeconds)} · Tap the circle when you're done`}
           </Text>
         )}
-        {recordState === 'transcript_preview' && transcript && (
-          <View style={styles.transcriptCard}>
-            <Text style={styles.transcriptLabel}>You said:</Text>
-            <Text style={styles.transcriptText}>"{transcript}"</Text>
+
+        {/* Transcript preview with cancel */}
+        {recordState === 'transcript_ready' && transcript && (
+          <View style={styles.transcriptPreviewContainer}>
+            <View style={styles.transcriptCard}>
+              <Text style={styles.transcriptLabel}>You said:</Text>
+              <Text style={styles.transcriptText}>"{transcript}"</Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.cancelTranscriptButton, { opacity: pressed ? 0.7 : 1 }]}
+              onPress={handleCancelTranscript}
+            >
+              <Text style={styles.cancelTranscriptText}>Cancel</Text>
+            </Pressable>
           </View>
         )}
 
@@ -321,12 +432,12 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
           </View>
         )}
 
-        {/* Error state */}
-        {recordState === 'error' && (
+        {/* STT error */}
+        {recordState === 'error_stt' && (
           <View style={styles.errorContainer}>
             <Ionicons name="warning-outline" size={40} color={theme.colors.negative} />
-            <Text style={styles.errorTitle}>Couldn't quite get that.</Text>
-            <Text style={styles.errorSub}>Try again or assign manually.</Text>
+            <Text style={styles.errorTitle}>Couldn't transcribe</Text>
+            <Text style={styles.errorSub}>Try again or type your split instead.</Text>
             <View style={styles.errorButtons}>
               <Pressable
                 style={({ pressed }) => [styles.primaryButton, { opacity: pressed ? 0.85 : 1 }]}
@@ -336,26 +447,47 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
               </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.secondaryButton, { opacity: pressed ? 0.8 : 1 }]}
-                onPress={handleAssignManually}
+                onPress={() => setShowTextModal(true)}
               >
-                <Text style={styles.secondaryButtonText}>Assign manually</Text>
+                <Text style={styles.secondaryButtonText}>Type instead</Text>
               </Pressable>
             </View>
           </View>
         )}
+
+        {/* MCP error */}
+        {recordState === 'error_mcp' && (
+          <View style={styles.errorContainer}>
+            <Ionicons name="warning-outline" size={40} color={theme.colors.negative} />
+            <Text style={styles.errorTitle}>Couldn't understand the split</Text>
+            <Text style={styles.errorSub}>Review and assign manually.</Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryButton, { opacity: pressed ? 0.85 : 1 }]}
+              onPress={handleAssignManually}
+            >
+              <Text style={styles.primaryButtonText}>Continue manually</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
-      {/* Helper text at bottom */}
+      {/* Helper text */}
       {(recordState === 'idle' || recordState === 'recording') && (
         <View style={styles.helperContainer}>
           <Text style={styles.helperLabel}>Try saying:</Text>
           <Text style={styles.helperExample}>
-            <Text style={styles.helperQuote}>{'“'}</Text>
+            <Text style={styles.helperQuote}>{'"'}</Text>
             {exampleLine.replace(/^[""]|[""]$/g, '')}
-            <Text style={styles.helperQuote}>{'”'}</Text>
+            <Text style={styles.helperQuote}>{'"'}</Text>
           </Text>
         </View>
       )}
+
+      <TextSplitModal
+        visible={showTextModal}
+        onClose={() => setShowTextModal(false)}
+        onSubmit={handleTextSubmit}
+      />
     </SafeAreaView>
   );
 }
@@ -430,6 +562,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  stepDots: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.bgElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.accentPrimary,
+  },
+  stepDotFilled: {
+    backgroundColor: theme.colors.accentPrimary,
+  },
   processingText: {
     color: theme.colors.textSecondary,
     fontSize: 14,
@@ -439,12 +586,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
   },
+  transcriptPreviewContainer: {
+    alignSelf: 'stretch',
+    gap: theme.spacing.sm,
+  },
   transcriptCard: {
     backgroundColor: theme.colors.surface,
     borderRadius: theme.radii.card,
     padding: theme.spacing.base,
     gap: theme.spacing.xs,
-    alignSelf: 'stretch',
   },
   transcriptLabel: {
     color: theme.colors.textSecondary,
@@ -457,6 +607,16 @@ const styles = StyleSheet.create({
     color: theme.colors.textPrimary,
     fontSize: 15,
     fontStyle: 'italic',
+  },
+  cancelTranscriptButton: {
+    alignSelf: 'center',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xl,
+  },
+  cancelTranscriptText: {
+    ...theme.typography.label,
+    color: theme.colors.textTertiary,
+    textDecorationLine: 'underline',
   },
   errorContainer: {
     alignItems: 'center',

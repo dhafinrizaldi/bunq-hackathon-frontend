@@ -1,22 +1,12 @@
-import type {
-  Transaction,
-  Contact,
-  SplitMode,
-  ParsedReceipt,
-  ParsedSplit,
-  ReceiptItem,
-  PendingSplit,
-} from "../types/types";
-import type { ApiSessionSummary, ApiSessionDetail } from "../types/api";
-import { mockTransactions } from "../mocks/mockTransactions";
-import { mockContacts } from "../mocks/mockContacts";
-import { mockReceipts } from "../mocks/mockReceipts";
-import { mockPendingSplits } from "../mocks/mockPendingSplits";
-import {
-  mockVoiceShouldFail,
-  mockVoiceTranscripts,
-} from "../mocks/mockVoiceData";
-import { mockUser } from "../mocks/mockUser";
+import type { Transaction, Contact, SplitMode, ParsedReceipt, ParsedSplit, ReceiptItem, PendingSplit } from '../types/types';
+import { transcribeAudio as realTranscribe } from '../services/stt';
+import type { ApiSessionSummary, ApiSessionDetail } from '../types/api';
+import { mockTransactions } from '../mocks/mockTransactions';
+import { mockContacts } from '../mocks/mockContacts';
+import { mockReceipts } from '../mocks/mockReceipts';
+import { mockPendingSplits } from '../mocks/mockPendingSplits';
+import { mockVoiceShouldFail, mockVoiceTranscripts } from '../mocks/mockVoiceData';
+import { mockUser } from '../mocks/mockUser';
 import {
   adaptSessionSummaryToPendingSplit,
   adaptSessionDetailToPendingSplit,
@@ -25,12 +15,12 @@ import {
 import axios from "axios";
 import { api } from ".";
 
-// ─── Feature flag ──────────────────────────────────────────────────
-// Set EXPO_PUBLIC_USE_REAL_API=true in .env to hit the real backend.
-const USE_REAL_API = process.env.EXPO_PUBLIC_USE_REAL_API === "true";
-// TODO: CONFIRM-BACKEND Q2 — what is the exact API base URL in dev?
-const API_BASE =
-  process.env.EXPO_PUBLIC_API_BASE ?? "http://localhost:8000/api";
+// ─── Feature flags ─────────────────────────────────────────────────
+const USE_REAL_API = process.env.EXPO_PUBLIC_USE_REAL_API === 'true';
+const USE_REAL_STT = process.env.EXPO_PUBLIC_USE_REAL_STT === 'true';
+const USE_REAL_MCP = process.env.EXPO_PUBLIC_USE_REAL_MCP === 'true';
+const API_BASE = process.env.EXPO_PUBLIC_API_BASE ?? 'http://localhost:8000';
+const MCP_BASE = process.env.EXPO_PUBLIC_MCP_BASE ?? 'http://localhost:8001';
 
 // ─── Auth ──────────────────────────────────────────────────────────
 // TODO: CONFIRM-BACKEND Q1 — what's the auth scheme? Bearer token? Cookie?
@@ -168,25 +158,100 @@ export async function createSplitRequest(
 
 // ─── Voice ────────────────────────────────────────────────────────
 
-// TODO: CONFIRM-BACKEND — POST /api/voice/transcribe
-// Backend will call STT service (Whisper, Deepgram, or AssemblyAI).
-export async function transcribeAudio(
-  _uri: string,
-): Promise<{ transcript: string }> {
-  await delay(1200);
-  return { transcript: mockVoiceTranscripts.specifyDefault };
+export interface ParseContext {
+  mode: 'even' | 'specify';
+  contacts: Contact[];
+  items?: ReceiptItem[];
+  currentUserId: string;
+  merchantName?: string;
+  totalAmount?: number; // cents
 }
 
-// TODO: CONFIRM-BACKEND — POST /api/voice/parse
-// Backend will call an LLM with a structured-output prompt.
+export async function transcribeAudio(uri: string): Promise<{ transcript: string }> {
+  if (!USE_REAL_STT) {
+    await delay(1200);
+    return { transcript: mockVoiceTranscripts.specifyDefault };
+  }
+  const result = await realTranscribe(uri);
+  return { transcript: result.transcript };
+}
+
 export async function parseSplitFromTranscript(
+  transcript: string,
+  context: ParseContext
+): Promise<ParsedSplit | null> {
+  if (!USE_REAL_MCP) return mockParseSplit(transcript, context);
+
+  const query = buildMcpQuery(transcript, context);
+
+  if (__DEV__) {
+    console.log('[mcp] Sending query:', query);
+  }
+
+  const res = await fetch(`${MCP_BASE}/query`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
+  });
+
+  if (!res.ok) {
+    throw new Error(`MCP query failed: ${res.status}`);
+  }
+
+  const data: { response: string } = await res.json();
+
+  if (__DEV__) {
+    console.log('[mcp] Response received:', data.response);
+  }
+
+  // MCP returns prose, not structured JSON. Return a ParsedSplit with empty assignments
+  // so the review screen loads and the user can assign manually. rawResponse is preserved
+  // for display in the "What the AI said" card.
+  if (context.mode === 'even') {
+    return {
+      mode: 'even',
+      participantIds: [context.currentUserId, ...context.contacts.map(c => c.id)],
+      rawResponse: data.response,
+      unparsedTranscript: transcript,
+    };
+  }
+  return {
+    mode: 'specify',
+    assignments: {},
+    rawResponse: data.response,
+    unparsedTranscript: transcript,
+  };
+}
+
+function buildMcpQuery(transcript: string, context: ParseContext): string {
+  const merchant = context.merchantName ?? 'this transaction';
+  const totalEur = context.totalAmount != null
+    ? (context.totalAmount / 100).toFixed(2)
+    : null;
+  const names = context.contacts.map(c => c.name).join(', ');
+
+  if (context.mode === 'even') {
+    const amountPart = totalEur ? `€${totalEur} from ${merchant}` : merchant;
+    return `Split ${amountPart} evenly between ${names}. ${transcript}`.trim();
+  }
+
+  const itemsList = context.items
+    ?.map(i => `${i.name} (€${(i.price / 100).toFixed(2)})`)
+    .join(', ') ?? '';
+  const amountPart = totalEur ? `€${totalEur} from ${merchant}` : merchant;
+  return [
+    `Split ${amountPart}.`,
+    itemsList ? `The receipt has: ${itemsList}.` : '',
+    `The participants are: ${names}.`,
+    `The user said: "${transcript}"`,
+  ].filter(Boolean).join(' ');
+}
+
+// ─── Mock voice implementations ───────────────────────────────────
+
+async function mockParseSplit(
   _transcript: string,
-  context: {
-    mode: "even" | "specify";
-    contacts: Contact[];
-    items?: ReceiptItem[];
-    currentUserId: string;
-  },
+  context: ParseContext
 ): Promise<ParsedSplit | null> {
   await delay(800);
   if (mockVoiceShouldFail) return null;
@@ -217,8 +282,7 @@ export async function parseSplitFromTranscript(
   for (const item of items) {
     const name = item.name.toLowerCase();
     const ids: string[] = [];
-
-    if (name.includes("bitterballen")) {
+    if (name.includes('bitterballen')) {
       if (tom) ids.push(tom.id);
     } else if (name.includes("heineken") || name.includes("beer")) {
       if (tom) ids.push(tom.id);
