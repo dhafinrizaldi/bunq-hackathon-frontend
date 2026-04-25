@@ -1,9 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
-  Pressable,
   TextInput,
   ActivityIndicator,
   StyleSheet,
@@ -19,6 +17,8 @@ import { FlowHeader } from '../components/FlowHeader';
 import { SectionHeader } from '../components/SectionHeader';
 import { ContactCard } from '../components/ContactCard';
 import { ContactRow } from '../components/ContactRow';
+import { Text } from '../components/ui/Text';
+import { Button } from '../components/ui/Button';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'ContactPicker'>;
 
@@ -77,7 +77,7 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
 
   const handleClose = () => navigation.getParent()?.goBack();
   const selectedCount = selectedIds.size;
-  const bottomBarHeight = 72 + insets.bottom;
+  const bottomBarHeight = 88 + insets.bottom;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -89,7 +89,7 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={theme.colors.accents.cyan} size="large" />
         </View>
       ) : (
         <ScrollView
@@ -102,9 +102,7 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
             <View>
               <View style={styles.nearbyHeading}>
                 <Ionicons name="location-outline" size={14} color={theme.colors.textSecondary} />
-                <Text style={styles.nearbyHeadingText}>
-                  Near {transaction!.merchantName}
-                </Text>
+                <Text variant="micro" color="secondary">Near {transaction!.merchantName}</Text>
               </View>
               <ScrollView
                 horizontal
@@ -121,7 +119,7 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
                   />
                 ))}
               </ScrollView>
-              <Text style={styles.disclaimer}>
+              <Text variant="micro" color="tertiary" style={styles.disclaimer}>
                 Based on approximate location · Mocked for demo
               </Text>
             </View>
@@ -133,7 +131,7 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
             value={searchQuery}
             onChangeText={setSearchQuery}
             placeholder="Search..."
-            placeholderTextColor={theme.colors.textSecondary}
+            placeholderTextColor={theme.colors.textTertiary}
           />
           {filteredContacts.map(c => (
             <ContactRow
@@ -147,18 +145,20 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
       )}
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + theme.spacing.base }]}>
-        <Text style={styles.selectionCount}>
+        <Text variant="label" color="secondary" style={styles.selectionCount}>
           {selectedCount === 0
             ? 'No one selected'
             : `${selectedCount} ${selectedCount === 1 ? 'person' : 'people'} selected`}
         </Text>
-        <Pressable
-          style={[styles.continueButton, selectedCount === 0 && styles.continueDisabled]}
+        <Button
+          label="Continue"
           onPress={handleContinue}
+          variant="accent"
+          accent="cyan"
           disabled={selectedCount === 0}
-        >
-          <Text style={styles.continueText}>Continue</Text>
-        </Pressable>
+          fullWidth={false}
+          style={styles.continueButton}
+        />
       </View>
     </SafeAreaView>
   );
@@ -167,7 +167,7 @@ export default function ContactPickerScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   loadingContainer: {
     flex: 1,
@@ -187,13 +187,6 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xl,
     marginBottom: theme.spacing.sm,
   },
-  nearbyHeadingText: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: theme.fonts.weights.semibold,
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
   nearbyScroll: {
     marginHorizontal: -theme.spacing.xl,
   },
@@ -202,14 +195,11 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.sm,
   },
   disclaimer: {
-    color: theme.colors.textSecondary,
-    fontSize: 11,
-    fontStyle: 'italic',
     marginBottom: theme.spacing.sm,
   },
   searchBar: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.full,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.md,
     color: theme.colors.textPrimary,
@@ -221,35 +211,18 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.bgRaised,
     paddingHorizontal: theme.spacing.xl,
     paddingTop: theme.spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     gap: theme.spacing.base,
   },
   selectionCount: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
     flex: 1,
   },
   continueButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
+    height: 48,
     paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.md,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  continueDisabled: {
-    opacity: 0.4,
-  },
-  continueText: {
-    color: '#0A0A0A',
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.bold,
   },
 });

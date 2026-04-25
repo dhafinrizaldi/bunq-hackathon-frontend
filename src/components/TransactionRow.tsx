@@ -1,6 +1,9 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Pressable, StyleSheet } from 'react-native';
 import * as Haptics from 'expo-haptics';
-import { theme } from '../theme/theme';
+import { theme, accentForKey } from '../theme/theme';
+import { Money } from './ui/Money';
+import { Text } from './ui/Text';
+import { CategoryIcon } from './ui/CategoryIcon';
 import type { Transaction } from '../types/types';
 
 interface TransactionRowProps {
@@ -9,16 +12,10 @@ interface TransactionRowProps {
   onLongPress: (transaction: Transaction) => void;
 }
 
-function formatAmount(amount: number, currency: string): string {
-  const symbol = currency === 'EUR' ? '€' : currency;
-  return `${symbol}${amount.toFixed(2)}`;
-}
-
 function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   const now = new Date();
   const diffHours = (now.getTime() - date.getTime()) / (1000 * 60 * 60);
-
   const h = date.getHours().toString().padStart(2, '0');
   const m = date.getMinutes().toString().padStart(2, '0');
   if (diffHours < 24) return `Today ${h}:${m}`;
@@ -28,33 +25,35 @@ function formatTimestamp(iso: string): string {
 }
 
 export function TransactionRow({ transaction, onSplitPress, onLongPress }: TransactionRowProps) {
+  const cents = Math.round(transaction.amount * 100);
+  const accent = accentForKey(transaction.merchantName);
+
   return (
     <Pressable
-      style={({ pressed }) => [
-        styles.row,
-        pressed && styles.rowPressed,
-      ]}
+      style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
       onLongPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         onLongPress(transaction);
       }}
       delayLongPress={500}
     >
-      <View style={styles.left}>
-        <Text style={styles.merchantName}>{transaction.merchantName}</Text>
-        <Text style={styles.timestamp}>{formatTimestamp(transaction.timestamp)}</Text>
+      <CategoryIcon
+        initials={transaction.merchantName.slice(0, 2)}
+        accent={accent}
+        size={44}
+      />
+      <View style={styles.middle}>
+        <Text variant="bodyStrong" color="primary" numberOfLines={1}>{transaction.merchantName}</Text>
+        <Text variant="label" color="tertiary">{formatTimestamp(transaction.timestamp)}</Text>
       </View>
       <View style={styles.right}>
-        <Text style={styles.amount}>{formatAmount(transaction.amount, transaction.currency)}</Text>
+        <Money amountCents={cents} currency={transaction.currency} size="small" color="primary" />
         <Pressable
-          style={({ pressed }) => [
-            styles.splitButton,
-            pressed && styles.splitButtonPressed,
-          ]}
+          style={({ pressed }) => [styles.splitPill, pressed && styles.splitPillPressed]}
           onPress={() => onSplitPress(transaction)}
           hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
         >
-          <Text style={styles.splitButtonText}>Split</Text>
+          <Text variant="labelStrong" color="primary">Split</Text>
         </Pressable>
       </View>
     </Pressable>
@@ -66,46 +65,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: theme.spacing.md,
-    minHeight: 52,
+    gap: theme.spacing.md,
+    minHeight: 60,
   },
   rowPressed: {
     opacity: 0.7,
   },
-  left: {
+  middle: {
     flex: 1,
     gap: 3,
   },
-  merchantName: {
-    ...theme.typography.bodyStrong,
-    color: theme.colors.textPrimary,
-  },
-  timestamp: {
-    ...theme.typography.label,
-    color: theme.colors.textTertiary,
-  },
   right: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
+    alignItems: 'flex-end',
+    gap: 4,
   },
-  amount: {
-    ...theme.typography.moneySmall,
-    color: theme.colors.textPrimary,
-  },
-  splitButton: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.md,
+  splitPill: {
+    backgroundColor: theme.colors.bgElevated,
+    borderRadius: theme.radii.full,
     paddingHorizontal: theme.spacing.md,
-    height: 40,
+    height: 28,
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: theme.colors.border,
   },
-  splitButtonPressed: {
-    backgroundColor: theme.colors.surfaceElevated,
-  },
-  splitButtonText: {
-    ...theme.typography.labelStrong,
-    color: theme.colors.textPrimary,
+  splitPillPressed: {
+    backgroundColor: theme.colors.bgPressed,
   },
 });

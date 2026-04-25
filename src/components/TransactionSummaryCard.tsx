@@ -1,6 +1,8 @@
-import { View, Text, StyleSheet } from 'react-native';
-import { theme } from '../theme/theme';
-import { Money } from './Money';
+import { View, StyleSheet } from 'react-native';
+import { theme, accentForKey } from '../theme/theme';
+import { Money } from './ui/Money';
+import { Text } from './ui/Text';
+import { CategoryIcon } from './ui/CategoryIcon';
 import type { Transaction } from '../types/types';
 
 interface TransactionSummaryCardProps {
@@ -21,12 +23,22 @@ function formatTimestamp(iso: string): string {
 
 export function TransactionSummaryCard({ transaction }: TransactionSummaryCardProps) {
   const cents = Math.round(transaction.amount * 100);
+  const accent = accentForKey(transaction.merchantName);
 
   return (
     <View style={styles.card}>
-      <Text style={styles.merchant} numberOfLines={1}>{transaction.merchantName}</Text>
-      <Money cents={cents} currency={transaction.currency} variant="hero" color={theme.colors.accentPrimary} />
-      <Text style={styles.timestamp}>{formatTimestamp(transaction.timestamp)}</Text>
+      <View style={styles.row}>
+        <CategoryIcon
+          initials={transaction.merchantName.slice(0, 2)}
+          accent={accent}
+          size={48}
+        />
+        <View style={styles.textCol}>
+          <Text variant="heading" color="primary" numberOfLines={1}>{transaction.merchantName}</Text>
+          <Text variant="label" color="tertiary">{formatTimestamp(transaction.timestamp)}</Text>
+        </View>
+      </View>
+      <Money amountCents={cents} currency={transaction.currency} size="hero" color={accent} />
     </View>
   );
 }
@@ -37,15 +49,15 @@ const styles = StyleSheet.create({
     borderRadius: theme.radii.xl,
     padding: theme.spacing.xl,
     marginVertical: theme.spacing.sm,
-    gap: theme.spacing.xs,
+    gap: theme.spacing.base,
   },
-  merchant: {
-    ...theme.typography.heading,
-    color: theme.colors.textPrimary,
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
   },
-  timestamp: {
-    ...theme.typography.label,
-    color: theme.colors.textTertiary,
-    marginTop: theme.spacing.xs,
+  textCol: {
+    flex: 1,
+    gap: 2,
   },
 });

@@ -68,5 +68,20 @@ export interface ParsedReceipt {
 }
 
 export type ParsedSplit =
-  | { mode: 'even'; participantIds: string[] }
-  | { mode: 'specify'; assignments: Record<string, string[]>; unparsedItems?: string[] };
+  | { mode: 'even'; participantIds: string[]; rawResponse?: string; unparsedTranscript?: string }
+  | { mode: 'specify'; assignments: Record<string, string[]>; unparsedItems?: string[]; rawResponse?: string; unparsedTranscript?: string };
+
+export interface MonetaryAccount {
+  id: string;
+  description: string; // from bunq; empty string if unnamed
+  balance: number;     // cents
+  currency: string;
+}
+
+export interface BunqUser {
+  id: string;
+  name: string;
+  displayName?: string;
+  iban?: string;
+  email?: string;
+}

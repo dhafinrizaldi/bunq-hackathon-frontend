@@ -1,17 +1,15 @@
 import { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   Pressable,
-  Image,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../theme/theme';
+import { theme, accentForKey } from '../theme/theme';
 import type { ReceiptItem, Contact } from '../types/types';
 import type { SplitFlowParamList } from '../navigation/types';
 import { useSplitFlow } from '../context/SplitFlowContext';
@@ -20,20 +18,19 @@ import { splitCentsEvenly, formatCents } from '../lib/money';
 import { FlowHeader } from '../components/FlowHeader';
 import { TransactionSummaryCard } from '../components/TransactionSummaryCard';
 import { EditItemSheet } from '../components/EditItemSheet';
+import { Text } from '../components/ui/Text';
+import { Money } from '../components/ui/Money';
+import { Button } from '../components/ui/Button';
+import { CategoryIcon } from '../components/ui/CategoryIcon';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'ItemAssignment'>;
 
-// Synthetic "You" entry for the current user
 const CURRENT_USER: Contact = {
   id: mockUser.id,
   email: mockUser.email,
   name: 'You',
   avatarUrl: mockUser.avatarUrl,
 };
-
-interface PersonTotals {
-  [personId: string]: number; // total in cents
-}
 
 // ─── Running Totals Card ────────────────────────────────────────
 interface TotalsCardProps {
@@ -43,26 +40,21 @@ interface TotalsCardProps {
 }
 
 function TotalsCard({ person, totalCents, currency }: TotalsCardProps) {
-  const [imgError, setImgError] = useState(false);
+  const accent = accentForKey(person.name);
   const hasAmount = totalCents > 0;
 
   return (
-    <View style={[styles.totalsCard, hasAmount && styles.totalsCardActive]}>
-      <View style={styles.totalsAvatar}>
-        {!imgError ? (
-          <Image
-            source={{ uri: person.avatarUrl }}
-            style={styles.totalsAvatarImg}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <View style={[styles.totalsAvatarImg, styles.totalsAvatarFallback]}>
-            <Text style={styles.totalsAvatarInitial}>{person.name.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.totalsName} numberOfLines={1}>{person.name}</Text>
-      <Text style={[styles.totalsAmount, hasAmount && styles.totalsAmountActive]}>
+    <View style={[styles.totalsCard, hasAmount && { backgroundColor: theme.colors.accentTints[accent] }]}>
+      <CategoryIcon initials={person.name.slice(0, 2)} accent={accent} size={32} />
+      <Text variant="micro" color="secondary" style={styles.totalsName} numberOfLines={1}>
+        {person.name}
+      </Text>
+      <Text
+        variant="micro"
+        color={hasAmount ? 'primary' : 'tertiary'}
+        style={styles.totalsAmount}
+        numberOfLines={1}
+      >
         {formatCents(totalCents, currency)}
       </Text>
     </View>
@@ -77,27 +69,23 @@ interface ChipProps {
 }
 
 function AssignmentChip({ person, selected, onPress }: ChipProps) {
-  const [imgError, setImgError] = useState(false);
+  const accent = accentForKey(person.name);
 
   return (
     <Pressable
-      style={[styles.chip, selected && styles.chipSelected]}
+      style={[
+        styles.chip,
+        selected && { backgroundColor: theme.colors.accents[accent] },
+      ]}
       onPress={onPress}
     >
-      <View style={styles.chipAvatar}>
-        {!imgError ? (
-          <Image
-            source={{ uri: person.avatarUrl }}
-            style={styles.chipAvatarImg}
-            onError={() => setImgError(true)}
-          />
-        ) : (
-          <View style={[styles.chipAvatarImg, styles.chipAvatarFallback]}>
-            <Text style={styles.chipInitial}>{person.name.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={[styles.chipName, selected && styles.chipNameSelected]} numberOfLines={1}>
+      <CategoryIcon initials={person.name.slice(0, 2)} accent={accent} size={20} />
+      <Text
+        variant="micro"
+        color={selected ? 'inverse' : 'secondary'}
+        style={styles.chipName}
+        numberOfLines={1}
+      >
         {person.name}
       </Text>
     </Pressable>
@@ -128,12 +116,10 @@ function ItemRow({ item, assignees, people, currency, highlighted, onTogglePerso
     >
       <View style={styles.itemHeader}>
         <View style={styles.itemLeft}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemMeta}>
-            {item.quantity} × {formatCents(item.price, currency)}
-          </Text>
+          <Text variant="bodyStrong" color="primary">{item.name}</Text>
+          <Text variant="micro" color="secondary">{item.quantity} × {formatCents(item.price, currency)}</Text>
         </View>
-        <Text style={styles.itemTotal}>{formatCents(total, currency)}</Text>
+        <Money amountCents={total} currency={currency} size="small" color="primary" />
       </View>
 
       <View style={styles.chipRow}>
@@ -157,7 +143,7 @@ function ItemRow({ item, assignees, people, currency, highlighted, onTogglePerso
           style={[styles.splitAllChip, allSelected && styles.splitAllChipActive]}
           onPress={() => onSplitEqually(item.id)}
         >
-          <Text style={[styles.splitAllText, allSelected && styles.splitAllTextActive]}>All</Text>
+          <Text variant="micro" color={allSelected ? 'primary' : 'tertiary'}>All</Text>
         </Pressable>
       </View>
     </Pressable>
@@ -183,15 +169,13 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
 
   const currency = transaction?.currency ?? 'EUR';
 
-  // All people who can be assigned: selected contacts + current user
   const people: Contact[] = useMemo(
     () => [...selectedContacts, CURRENT_USER],
     [selectedContacts]
   );
 
-  // Per-person running totals
-  const personTotals: PersonTotals = useMemo(() => {
-    const totals: PersonTotals = {};
+  const personTotals = useMemo(() => {
+    const totals: Record<string, number> = {};
     for (const person of people) {
       totals[person.id] = items.reduce((sum, item) => {
         const assignees = assignments[item.id] ?? [];
@@ -242,15 +226,8 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
     navigation.navigate('SpecifySplitConfirm');
   };
 
-  const openEditSheet = (item: ReceiptItem) => {
-    setEditTarget(item);
-    setSheetVisible(true);
-  };
-
-  const openAddSheet = () => {
-    setEditTarget(null);
-    setSheetVisible(true);
-  };
+  const openEditSheet = (item: ReceiptItem) => { setEditTarget(item); setSheetVisible(true); };
+  const openAddSheet = () => { setEditTarget(null); setSheetVisible(true); };
 
   const handleSheetSave = (item: ReceiptItem) => {
     if (editTarget === null) {
@@ -274,7 +251,7 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
       <SafeAreaView style={styles.container}>
         <FlowHeader title="Who had what" onBack={() => navigation.goBack()} onClose={handleClose} />
         <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={theme.colors.accents.cyan} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -296,7 +273,6 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
       >
         <TransactionSummaryCard transaction={transaction} />
 
-        {/* Running totals strip */}
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -313,45 +289,43 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
           ))}
         </ScrollView>
 
-        {/* Voice draft banner */}
         {voiceWasUsed && !voiceBannerDismissed && (
           <View style={styles.voiceBanner}>
-            <Text style={styles.voiceBannerText}>⚡ Voice draft applied — review and fix anything wrong</Text>
+            <Text variant="label" color="secondary" style={styles.flex1}>
+              ⚡ Voice draft applied — review and fix anything wrong
+            </Text>
             <Pressable onPress={() => setVoiceBannerDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={14} color={theme.colors.accentPrimary} />
+              <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
             </Pressable>
           </View>
         )}
 
-        {/* Collapsible transcript card */}
         {voiceWasUsed && lastTranscript && (
           <Pressable style={styles.transcriptCard} onPress={() => setTranscriptExpanded(e => !e)}>
             <View style={styles.transcriptCardHeader}>
-              <Text style={styles.transcriptCardLabel}>You said</Text>
+              <Text variant="label" color="tertiary">You said</Text>
               <Ionicons
                 name={transcriptExpanded ? 'chevron-up' : 'chevron-down'}
                 size={14}
-                color={theme.colors.textSecondary}
+                color={theme.colors.textTertiary}
               />
             </View>
             {transcriptExpanded && (
-              <Text style={styles.transcriptCardText}>"{lastTranscript}"</Text>
+              <Text variant="body" color="secondary" style={styles.transcriptText}>"{lastTranscript}"</Text>
             )}
           </Pressable>
         )}
 
-        {/* Inline banner for unassigned warning */}
         {bannerText && (
           <View style={styles.banner}>
             <Ionicons name="warning-outline" size={14} color={theme.colors.negative} />
-            <Text style={styles.bannerText}>{bannerText}</Text>
+            <Text variant="label" color="negative" style={styles.flex1}>{bannerText}</Text>
           </View>
         )}
 
-        {/* Item list */}
         {items.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyStateText}>No items yet — add them below</Text>
+            <Text variant="label" color="secondary">No items yet — add them below</Text>
           </View>
         ) : (
           items.map(item => (
@@ -373,26 +347,28 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
           style={({ pressed }) => [styles.addItemButton, { opacity: pressed ? 0.8 : 1 }]}
           onPress={openAddSheet}
         >
-          <Ionicons name="add" size={18} color={theme.colors.accentPrimary} />
-          <Text style={styles.addItemText}>Add item</Text>
+          <Ionicons name="add" size={18} color={theme.colors.accents.cyan} />
+          <Text variant="labelStrong" color="primary">Add item</Text>
         </Pressable>
       </ScrollView>
 
-      {/* Sticky bottom bar */}
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + theme.spacing.base }]}>
-        <Text style={[
-          styles.assignedLabel,
-          assignedTotal < receiptTotal ? styles.assignedLabelNeg : styles.assignedLabelPos,
-        ]}>
-          Assigned: {formatCents(assignedTotal, currency)} / {formatCents(receiptTotal, currency)}
-        </Text>
-        <Pressable
-          style={[styles.continueButton, items.length === 0 && styles.continueDisabled]}
-          onPress={handleContinue}
-          disabled={items.length === 0}
+        <Text
+          variant="labelStrong"
+          color={assignedTotal < receiptTotal ? 'negative' : 'positive'}
+          style={styles.flex1}
         >
-          <Text style={styles.continueText}>Continue</Text>
-        </Pressable>
+          {formatCents(assignedTotal, currency)} / {formatCents(receiptTotal, currency)}
+        </Text>
+        <Button
+          label="Continue"
+          onPress={handleContinue}
+          variant="accent"
+          accent="cyan"
+          disabled={items.length === 0}
+          fullWidth={false}
+          style={styles.continueBtn}
+        />
       </View>
 
       <EditItemSheet
@@ -410,16 +386,14 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   centered: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: theme.spacing.xl,
   },
@@ -440,77 +414,40 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  totalsCardActive: {
-    backgroundColor: theme.colors.accentSubtle,
-  },
-  totalsAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.radii.full,
-    overflow: 'hidden',
-  },
-  totalsAvatarImg: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.radii.full,
-  },
-  totalsAvatarFallback: {
-    backgroundColor: theme.colors.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  totalsAvatarInitial: {
-    ...theme.typography.labelStrong,
-    color: theme.colors.textPrimary,
-  },
   totalsName: {
-    ...theme.typography.micro,
-    color: theme.colors.textSecondary,
     textAlign: 'center',
   },
   totalsAmount: {
-    ...theme.typography.micro,
-    color: theme.colors.textTertiary,
     textAlign: 'center',
-  },
-  totalsAmountActive: {
-    color: theme.colors.textPrimary,
   },
   banner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: 'rgba(255,92,92,0.12)',
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.negativeSoft,
+    borderRadius: theme.radii.sm,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.sm,
     marginTop: theme.spacing.sm,
-  },
-  bannerText: {
-    ...theme.typography.label,
-    color: theme.colors.negative,
-    flex: 1,
   },
   voiceBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: 'rgba(0,220,120,0.15)',
+    backgroundColor: theme.colors.bgRaised,
     borderLeftWidth: 3,
-    borderLeftColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
+    borderLeftColor: theme.colors.accents.cyan,
+    borderRadius: theme.radii.sm,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.sm,
     marginTop: theme.spacing.sm,
   },
-  voiceBannerText: {
-    ...theme.typography.micro,
-    color: theme.colors.accentPrimary,
+  flex1: {
     flex: 1,
   },
   transcriptCard: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.radii.card,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.lg,
     padding: theme.spacing.base,
     marginTop: theme.spacing.sm,
   },
@@ -519,14 +456,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  transcriptCardLabel: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: theme.fonts.weights.semibold,
-  },
-  transcriptCardText: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
+  transcriptText: {
     fontStyle: 'italic',
     marginTop: theme.spacing.xs,
   },
@@ -534,21 +464,17 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xxl,
     alignItems: 'center',
   },
-  emptyStateText: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-  },
   itemRow: {
     marginTop: theme.spacing.base,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.card,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.lg,
     padding: theme.spacing.base,
     gap: theme.spacing.sm,
     borderLeftWidth: 3,
     borderLeftColor: 'transparent',
   },
   itemRowHighlighted: {
-    borderLeftColor: '#FF5C5C',
+    borderLeftColor: theme.colors.negative,
   },
   itemHeader: {
     flexDirection: 'row',
@@ -559,26 +485,12 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 2,
   },
-  itemName: {
-    ...theme.typography.bodyStrong,
-    color: theme.colors.textPrimary,
-  },
-  itemMeta: {
-    ...theme.typography.micro,
-    color: theme.colors.textSecondary,
-  },
-  itemTotal: {
-    ...theme.typography.moneySmall,
-    color: theme.colors.textPrimary,
-  },
   chipRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
   },
-  chipScroll: {
-    flex: 1,
-  },
+  chipScroll: { flex: 1 },
   chipScrollContent: {
     gap: theme.spacing.xs,
     paddingRight: theme.spacing.xs,
@@ -592,36 +504,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingVertical: 5,
   },
-  chipSelected: {
-    backgroundColor: theme.colors.accentPrimary,
-  },
-  chipAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: theme.radii.full,
-    overflow: 'hidden',
-  },
-  chipAvatarImg: {
-    width: 20,
-    height: 20,
-    borderRadius: theme.radii.full,
-  },
-  chipAvatarFallback: {
-    backgroundColor: theme.colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  chipInitial: {
-    ...theme.typography.micro,
-    color: theme.colors.textPrimary,
-  },
   chipName: {
-    ...theme.typography.micro,
-    color: theme.colors.textSecondary,
     maxWidth: 50,
-  },
-  chipNameSelected: {
-    color: theme.colors.onAccent,
   },
   splitAllChip: {
     paddingHorizontal: theme.spacing.sm,
@@ -630,71 +514,37 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.bgElevated,
   },
   splitAllChipActive: {
-    backgroundColor: theme.colors.accentSubtle,
-  },
-  splitAllText: {
-    ...theme.typography.micro,
-    color: theme.colors.textSecondary,
-  },
-  splitAllTextActive: {
-    color: theme.colors.accentPrimary,
+    backgroundColor: theme.colors.bgElevated,
+    borderWidth: 1,
+    borderColor: theme.colors.accents.cyan,
   },
   addItemButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.full,
     paddingVertical: theme.spacing.md,
     marginTop: theme.spacing.base,
     borderWidth: 1.5,
-    borderColor: theme.colors.accentPrimary,
+    borderColor: theme.colors.accents.cyan,
     minHeight: 44,
-  },
-  addItemText: {
-    color: theme.colors.accentPrimary,
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.semibold,
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.bgRaised,
     paddingHorizontal: theme.spacing.xl,
     paddingTop: theme.spacing.base,
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.base,
   },
-  assignedLabel: {
-    flex: 1,
-    ...theme.typography.labelStrong,
-  },
-  assignedLabelNeg: {
-    color: theme.colors.negative,
-  },
-  assignedLabelPos: {
-    color: theme.colors.positive,
-  },
-  continueButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
+  continueBtn: {
+    height: 48,
     paddingHorizontal: theme.spacing.xl,
-    paddingVertical: theme.spacing.md,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  continueDisabled: {
-    opacity: 0.4,
-  },
-  continueText: {
-    color: '#0A0A0A',
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.bold,
   },
 });

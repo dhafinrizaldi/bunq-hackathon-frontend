@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -10,6 +10,7 @@ import type { SplitFlowParamList } from '../navigation/types';
 import * as api from '../api/client';
 import { FlowHeader } from '../components/FlowHeader';
 import { TransactionSummaryCard } from '../components/TransactionSummaryCard';
+import { Text } from '../components/ui/Text';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'SplitMode'>;
 
@@ -17,30 +18,30 @@ interface OptionCardProps {
   icon: React.ComponentProps<typeof Ionicons>['name'];
   title: string;
   subtitle: string;
-  accent?: boolean;
+  primary?: boolean;
   onPress: () => void;
 }
 
-function OptionCard({ icon, title, subtitle, accent, onPress }: OptionCardProps) {
+function OptionCard({ icon, title, subtitle, primary, onPress }: OptionCardProps) {
   return (
     <Pressable
       style={({ pressed }) => [
         styles.optionCard,
-        accent && styles.optionCardAccent,
+        primary && styles.optionCardPrimary,
         pressed && styles.optionCardPressed,
       ]}
       onPress={onPress}
     >
-      <View style={[styles.optionIcon, accent && styles.optionIconAccent]}>
+      <View style={[styles.optionIcon, primary && styles.optionIconPrimary]}>
         <Ionicons
           name={icon}
           size={22}
-          color={accent ? theme.colors.accentPrimary : theme.colors.textSecondary}
+          color={primary ? theme.colors.accents.cyan : theme.colors.textSecondary}
         />
       </View>
       <View style={styles.optionText}>
-        <Text style={styles.optionTitle}>{title}</Text>
-        <Text style={styles.optionSubtitle}>{subtitle}</Text>
+        <Text variant="bodyStrong" color="primary">{title}</Text>
+        <Text variant="label" color="secondary">{subtitle}</Text>
       </View>
       <Ionicons name="chevron-forward" size={18} color={theme.colors.textTertiary} />
     </Pressable>
@@ -75,7 +76,7 @@ export default function SplitModeScreen({ navigation, route }: Props) {
       <SafeAreaView style={styles.container}>
         <FlowHeader title="Split this?" onClose={handleClose} />
         <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={theme.colors.accents.cyan} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -96,7 +97,7 @@ export default function SplitModeScreen({ navigation, route }: Props) {
             icon="people-outline"
             title="Split evenly"
             subtitle="Same amount from everyone"
-            accent
+            primary
             onPress={() => handleOption('even')}
           />
           <OptionCard
@@ -107,10 +108,9 @@ export default function SplitModeScreen({ navigation, route }: Props) {
           />
         </View>
 
-        {/* Voice option — demoted, beneath "or" divider */}
         <View style={styles.orRow}>
           <View style={styles.orLine} />
-          <Text style={styles.orLabel}>or</Text>
+          <Text variant="micro" color="tertiary">or</Text>
           <View style={styles.orLine} />
         </View>
 
@@ -119,15 +119,14 @@ export default function SplitModeScreen({ navigation, route }: Props) {
           onPress={() => handleOption('voice')}
         >
           <Ionicons name="mic-outline" size={16} color={theme.colors.textSecondary} />
-          <Text style={styles.voiceOptionText}>Speak to split</Text>
+          <Text variant="labelStrong" color="secondary">Speak to split</Text>
         </Pressable>
 
-        {/* Don't split */}
         <Pressable
           style={({ pressed }) => [styles.skipLink, { opacity: pressed ? 0.6 : 1 }]}
           onPress={() => handleOption('none')}
         >
-          <Text style={styles.skipText}>Don't split</Text>
+          <Text variant="label" color="tertiary">Don't split</Text>
         </Pressable>
       </ScrollView>
     </SafeAreaView>
@@ -137,7 +136,7 @@ export default function SplitModeScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   centered: {
     flex: 1,
@@ -162,8 +161,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     minHeight: 72,
   },
-  optionCardAccent: {
-    backgroundColor: theme.colors.accentSubtle,
+  optionCardPrimary: {
+    backgroundColor: theme.colors.accentTints.cyan,
   },
   optionCardPressed: {
     transform: [{ scale: 0.97 }],
@@ -176,20 +175,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  optionIconAccent: {
-    backgroundColor: 'rgba(0,220,120,0.2)',
+  optionIconPrimary: {
+    backgroundColor: 'rgba(62,191,230,0.2)',
   },
   optionText: {
     flex: 1,
     gap: 3,
-  },
-  optionTitle: {
-    ...theme.typography.bodyStrong,
-    color: theme.colors.textPrimary,
-  },
-  optionSubtitle: {
-    ...theme.typography.label,
-    color: theme.colors.textSecondary,
   },
   orRow: {
     flexDirection: 'row',
@@ -200,11 +191,7 @@ const styles = StyleSheet.create({
   orLine: {
     flex: 1,
     height: 1,
-    backgroundColor: theme.colors.divider,
-  },
-  orLabel: {
-    ...theme.typography.micro,
-    color: theme.colors.textTertiary,
+    backgroundColor: theme.colors.bgElevated,
   },
   voiceOption: {
     flexDirection: 'row',
@@ -212,24 +199,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: theme.spacing.sm,
     paddingVertical: theme.spacing.md,
-    borderRadius: theme.radii.md,
+    borderRadius: theme.radii.full,
     borderWidth: 1,
-    borderColor: theme.colors.border,
+    borderColor: theme.colors.bgElevated,
     marginBottom: theme.spacing.base,
   },
   voiceOptionPressed: {
     backgroundColor: theme.colors.bgRaised,
   },
-  voiceOptionText: {
-    ...theme.typography.labelStrong,
-    color: theme.colors.textSecondary,
-  },
   skipLink: {
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
-  },
-  skipText: {
-    ...theme.typography.label,
-    color: theme.colors.textTertiary,
   },
 });

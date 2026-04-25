@@ -1,76 +1,67 @@
 import { useEffect, useState } from 'react';
 import {
+  Alert,
   View,
-  Text,
   ScrollView,
   TextInput,
   Pressable,
   ActivityIndicator,
-  Image,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../theme/theme';
+import { theme, accentForKey } from '../theme/theme';
 import type { Transaction, Contact } from '../types/types';
 import type { SplitFlowParamList } from '../navigation/types';
 import * as api from '../api/client';
+import { splitCentsEvenly } from '../lib/money';
 import { mockUser } from '../mocks/mockUser';
 import { FlowHeader } from '../components/FlowHeader';
 import { TransactionSummaryCard } from '../components/TransactionSummaryCard';
+import { Text } from '../components/ui/Text';
+import { Money } from '../components/ui/Money';
+import { Button } from '../components/ui/Button';
+import { CategoryIcon } from '../components/ui/CategoryIcon';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'EvenSplitConfirm'>;
 
-interface SplitCalc {
-  perPersonAmount: number;
-  userShare: number;
+interface ContactShare {
+  contact: Contact;
+  amountCents: number;
+}
+
+interface EvenSplit {
+  contactShares: ContactShare[];
+  userAmountCents: number;
+  totalCents: number;
   totalPeople: number;
+  baseCents: number;
   hasRemainder: boolean;
 }
 
-function calcEvenSplit(totalAmount: number, contactCount: number): SplitCalc {
-  const totalPeople = contactCount + 1;
+function computeEvenSplit(totalAmount: number, contacts: Contact[]): EvenSplit {
   const totalCents = Math.round(totalAmount * 100);
-  const baseCents = Math.floor(totalCents / totalPeople);
-  const remainderCents = totalCents - baseCents * totalPeople;
+  const totalPeople = contacts.length + 1;
+  const shares = splitCentsEvenly(totalCents, totalPeople);
+  // contacts occupy indices 0..n-2; user is last (index n-1)
   return {
-    perPersonAmount: baseCents / 100,
-    userShare: (baseCents + remainderCents) / 100,
+    contactShares: contacts.map((c, i) => ({ contact: c, amountCents: shares[i] })),
+    userAmountCents: shares[totalPeople - 1],
+    totalCents,
     totalPeople,
-    hasRemainder: remainderCents > 0,
+    baseCents: Math.floor(totalCents / totalPeople),
+    hasRemainder: totalCents % totalPeople !== 0,
   };
 }
 
-function formatCurrency(amount: number): string {
-  return `€${amount.toFixed(2)}`;
-}
-
-interface ParticipantRowProps {
-  contact: Contact;
-  amount: number;
-}
-
-function ParticipantRow({ contact, amount }: ParticipantRowProps) {
-  const [imageError, setImageError] = useState(false);
-
+function ParticipantRow({ contact, amountCents }: { contact: Contact; amountCents: number }) {
+  const accent = accentForKey(contact.name);
   return (
     <View style={styles.participantRow}>
-      <View style={styles.participantAvatarContainer}>
-        {!imageError ? (
-          <Image
-            source={{ uri: contact.avatarUrl }}
-            style={styles.participantAvatar}
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <View style={[styles.participantAvatar, styles.participantAvatarFallback]}>
-            <Text style={styles.participantInitial}>{contact.name.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.participantName}>{contact.name}</Text>
-      <Text style={styles.participantAmount}>{formatCurrency(amount)}</Text>
+      <CategoryIcon initials={contact.name.slice(0, 2)} accent={accent} size={36} />
+      <Text variant="bodyStrong" color="primary" style={styles.participantName}>{contact.name}</Text>
+      <Money amountCents={amountCents} size="small" color={accent} />
     </View>
   );
 }
@@ -101,8 +92,7 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
   }, [transactionId, selectedContactIds]);
 
   const handleClose = () => navigation.getParent()?.goBack();
-
-  const split = transaction ? calcEvenSplit(transaction.amount, selectedContacts.length) : null;
+  const split = transaction ? computeEvenSplit(transaction.amount, selectedContacts) : null;
 
   const handleSubmit = async () => {
     if (!transaction || submitting || !split) return;
@@ -115,9 +105,9 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
         {
           transactionId: transaction.id,
           mode: 'even',
-          participants: selectedContacts.map(c => ({
-            contactId: c.id,
-            amount: split.perPersonAmount,
+          participants: split.contactShares.map(({ contact, amountCents }) => ({
+            contactId: contact.id,
+            amount: amountCents, // cents, consistent with specify split
           })),
           note: note.trim() || undefined,
         },
@@ -126,6 +116,8 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
         {}
       );
       setSuccess(true);
+    } catch {
+      Alert.alert('Something went wrong', 'Could not send split requests. Please try again.');
     } finally {
       setSubmitting(false);
     }
@@ -138,7 +130,7 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
       <SafeAreaView style={styles.container}>
         <FlowHeader title="Confirm split" onBack={() => navigation.goBack()} onClose={handleClose} />
         <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={theme.colors.accents.cyan} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -148,18 +140,13 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.successContainer}>
-          <Ionicons name="checkmark-circle" size={80} color={theme.colors.accentPrimary} />
-          <Text style={styles.successTitle}>Requests sent!</Text>
-          <Text style={styles.successSub}>
+          <Ionicons name="checkmark-circle" size={80} color={theme.colors.accents.cyan} />
+          <Text variant="title" color="primary" style={styles.successTitle}>Requests sent!</Text>
+          <Text variant="body" color="secondary" style={styles.successSub}>
             Payment requests sent to {selectedContacts.length}{' '}
             {selectedContacts.length === 1 ? 'person' : 'people'} via bunq
           </Text>
-          <Pressable
-            style={({ pressed }) => [styles.doneButton, { opacity: pressed ? 0.85 : 1 }]}
-            onPress={handleClose}
-          >
-            <Text style={styles.doneButtonText}>Done</Text>
-          </Pressable>
+          <Button label="Done" onPress={handleClose} variant="accent" accent="cyan" fullWidth={false} style={styles.doneButton} />
         </View>
       </SafeAreaView>
     );
@@ -177,50 +164,54 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
       >
         {transaction && <TransactionSummaryCard transaction={transaction} />}
 
-        {/* Voice draft banner */}
         {voiceWasUsed && !voiceBannerDismissed && (
           <View style={styles.voiceBanner}>
-            <Text style={styles.voiceBannerText}>⚡ Voice draft applied — review and fix anything wrong</Text>
+            <Text variant="label" color="secondary" style={styles.voiceBannerText}>
+              ⚡ Voice draft applied — review and fix anything wrong
+            </Text>
             <Pressable onPress={() => setVoiceBannerDismissed(true)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close" size={14} color={theme.colors.accentPrimary} />
+              <Ionicons name="close" size={14} color={theme.colors.textTertiary} />
             </Pressable>
           </View>
         )}
 
-        {/* Collapsible transcript card */}
         {voiceWasUsed && lastTranscript && (
           <Pressable style={styles.transcriptCard} onPress={() => setTranscriptExpanded(e => !e)}>
             <View style={styles.transcriptCardHeader}>
-              <Text style={styles.transcriptCardLabel}>You said</Text>
+              <Text variant="label" color="tertiary">You said</Text>
               <Ionicons
                 name={transcriptExpanded ? 'chevron-up' : 'chevron-down'}
                 size={14}
-                color={theme.colors.textSecondary}
+                color={theme.colors.textTertiary}
               />
             </View>
             {transcriptExpanded && (
-              <Text style={styles.transcriptCardText}>"{lastTranscript}"</Text>
+              <Text variant="body" color="secondary" style={styles.transcriptText}>
+                "{lastTranscript}"
+              </Text>
             )}
           </Pressable>
         )}
 
         {split && (
           <View style={styles.calcCard}>
-            <Text style={styles.calcMain}>
-              {formatCurrency(transaction!.amount)} ÷ {split.totalPeople} people ={' '}
-              {formatCurrency(split.perPersonAmount)} each
+            <Text variant="bodyStrong" color="primary">
+              {`€${transaction!.amount.toFixed(2)} ÷ ${split.totalPeople} people`}
             </Text>
-            {split.hasRemainder && (
-              <Text style={styles.calcRemainder}>
-                ({formatCurrency(split.userShare)} from you to round)
-              </Text>
-            )}
+            <Text variant="label" color="secondary">
+              {split.hasRemainder
+                ? `€${(split.baseCents / 100).toFixed(2)} – €${((split.baseCents + 1) / 100).toFixed(2)} per person`
+                : `€${(split.baseCents / 100).toFixed(2)} each`}
+            </Text>
+            <Text variant="label" color="secondary">
+              {`Your share: €${(split.userAmountCents / 100).toFixed(2)}`}
+            </Text>
           </View>
         )}
 
         <View style={styles.participantList}>
-          {selectedContacts.map(c => (
-            <ParticipantRow key={c.id} contact={c} amount={split?.perPersonAmount ?? 0} />
+          {split?.contactShares.map(({ contact, amountCents }) => (
+            <ParticipantRow key={contact.id} contact={contact} amountCents={amountCents} />
           ))}
         </View>
 
@@ -229,27 +220,23 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
           value={note}
           onChangeText={setNote}
           placeholder={`Dinner at ${transaction?.merchantName ?? 'the restaurant'}`}
-          placeholderTextColor={theme.colors.textSecondary}
+          placeholderTextColor={theme.colors.textTertiary}
           maxLength={140}
         />
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + theme.spacing.base }]}>
-        <Text style={styles.disclaimer}>
-          You'll send a payment request to {selectedContacts.length}{' '}
+        <Text variant="label" color="tertiary" style={styles.disclaimer}>
+          Sending requests to {selectedContacts.length}{' '}
           {selectedContacts.length === 1 ? 'person' : 'people'} via bunq
         </Text>
-        <Pressable
-          style={({ pressed }) => [styles.sendButton, { opacity: pressed ? 0.85 : 1 }]}
+        <Button
+          label="Send requests"
           onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#0A0A0A" />
-          ) : (
-            <Text style={styles.sendButtonText}>Send requests</Text>
-          )}
-        </Pressable>
+          variant="accent"
+          accent="cyan"
+          loading={submitting}
+        />
       </View>
     </SafeAreaView>
   );
@@ -258,7 +245,7 @@ export default function EvenSplitConfirmScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   centered: {
     flex: 1,
@@ -273,33 +260,17 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   successTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 24,
-    fontWeight: theme.fonts.weights.bold,
     marginTop: theme.spacing.base,
   },
   successSub: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
     textAlign: 'center',
   },
   doneButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
-    paddingHorizontal: theme.spacing.xxl,
-    paddingVertical: theme.spacing.md,
     marginTop: theme.spacing.xl,
-    minHeight: 44,
-    justifyContent: 'center',
+    paddingHorizontal: theme.spacing.xxl,
+    width: 200,
   },
-  doneButtonText: {
-    color: '#0A0A0A',
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.bold,
-  },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: theme.spacing.xl,
   },
@@ -307,22 +278,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: 'rgba(0,220,120,0.15)',
+    backgroundColor: theme.colors.bgRaised,
     borderLeftWidth: 3,
-    borderLeftColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
+    borderLeftColor: theme.colors.accents.cyan,
+    borderRadius: theme.radii.sm,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.sm,
     marginTop: theme.spacing.sm,
   },
   voiceBannerText: {
-    color: theme.colors.accentPrimary,
-    fontSize: 12,
     flex: 1,
   },
   transcriptCard: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.radii.card,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.lg,
     padding: theme.spacing.base,
     marginTop: theme.spacing.sm,
   },
@@ -331,32 +300,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  transcriptCardLabel: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
-    fontWeight: theme.fonts.weights.semibold,
-  },
-  transcriptCardText: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
+  transcriptText: {
     fontStyle: 'italic',
     marginTop: theme.spacing.xs,
   },
   calcCard: {
-    backgroundColor: theme.colors.surfaceElevated,
-    borderRadius: theme.radii.card,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.lg,
     padding: theme.spacing.base,
     marginTop: theme.spacing.base,
     gap: theme.spacing.xs,
-  },
-  calcMain: {
-    color: theme.colors.textPrimary,
-    fontSize: 17,
-    fontWeight: theme.fonts.weights.bold,
-  },
-  calcRemainder: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
   },
   participantList: {
     marginTop: theme.spacing.base,
@@ -365,79 +318,32 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
     gap: theme.spacing.sm,
-  },
-  participantAvatarContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  participantAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  participantAvatarFallback: {
-    backgroundColor: theme.colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  participantInitial: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: theme.fonts.weights.bold,
   },
   participantName: {
     flex: 1,
-    color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.semibold,
-  },
-  participantAmount: {
-    color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.bold,
   },
   noteInput: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.full,
     padding: theme.spacing.base,
+    paddingHorizontal: theme.spacing.lg,
     color: theme.colors.textPrimary,
     fontSize: 15,
     marginTop: theme.spacing.base,
-    minHeight: 44,
+    minHeight: 48,
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.bgRaised,
     paddingHorizontal: theme.spacing.xl,
     paddingTop: theme.spacing.base,
     gap: theme.spacing.sm,
   },
   disclaimer: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
     textAlign: 'center',
-  },
-  sendButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
-    paddingVertical: theme.spacing.md,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendButtonText: {
-    color: '#0A0A0A',
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.bold,
   },
 });

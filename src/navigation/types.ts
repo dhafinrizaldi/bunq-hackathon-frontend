@@ -2,7 +2,7 @@ import type { NavigatorScreenParams } from '@react-navigation/native';
 
 export type TabParamList = {
   Home: undefined;
-  Activity: undefined;
+  Agent: undefined;
   Profile: undefined;
 };
 
@@ -22,6 +22,8 @@ export type SplitFlowParamList = {
 };
 
 export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
   MainTabs: undefined;
   SplitFlowStack: NavigatorScreenParams<SplitFlowParamList>;
   SessionDetail: { splitId: string };

@@ -12,30 +12,35 @@ import {
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
-import { loginUser } from '../api/client';
+import { registerUser } from '../api/client';
 import { theme } from '../theme/theme';
 import { Text } from '../components/ui/Text';
 import { RainbowStripe } from '../components/ui/RainbowStripe';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
-export default function LoginPage({ navigation }: Props) {
+export default function RegisterPage({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async () => {
-    if (!email || !password) {
-      Alert.alert('Missing fields', 'Please enter your email and password.');
+  const handleRegister = async () => {
+    if (!email || !password || !confirmPassword) {
+      Alert.alert('Missing fields', 'Please fill in all fields.');
+      return;
+    }
+    if (password !== confirmPassword) {
+      Alert.alert('Password mismatch', 'Passwords do not match.');
       return;
     }
     setLoading(true);
     try {
-      await loginUser({ email, password });
+      await registerUser({ email, password });
       navigation.replace('MainTabs');
     } catch (err: any) {
       const message =
-        err?.response?.data?.detail ?? 'Login failed. Please try again.';
+        err?.response?.data?.detail ?? 'Registration failed. Please try again.';
       Alert.alert('Error', message);
     } finally {
       setLoading(false);
@@ -52,7 +57,7 @@ export default function LoginPage({ navigation }: Props) {
       <View style={styles.header}>
         <RainbowStripe height={4} style={styles.stripe} />
         <Text variant="hero" color="primary" style={styles.brand}>bunq</Text>
-        <Text variant="label" color="tertiary">split</Text>
+        <Text variant="label" color="tertiary">Create your account</Text>
       </View>
 
       <View style={styles.form}>
@@ -78,23 +83,33 @@ export default function LoginPage({ navigation }: Props) {
           onChangeText={setPassword}
         />
 
+        <Text variant="micro" color="tertiary" style={[styles.fieldLabel, styles.fieldLabelGap]}>CONFIRM PASSWORD</Text>
+        <TextInput
+          style={styles.input}
+          placeholder="••••••••"
+          placeholderTextColor={theme.colors.textTertiary}
+          secureTextEntry
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+        />
+
         <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
-          onPress={handleLogin}
+          onPress={handleRegister}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator color="#000" />
           ) : (
-            <Text variant="bodyStrong" color="inverse">Log in</Text>
+            <Text variant="bodyStrong" color="inverse">Create account</Text>
           )}
         </Pressable>
       </View>
 
       <View style={styles.footer}>
-        <Text variant="label" color="tertiary">Don't have an account? </Text>
-        <Pressable onPress={() => navigation.navigate('Register')}>
-          <Text variant="labelStrong" color="primary">Sign up</Text>
+        <Text variant="label" color="tertiary">Already have an account? </Text>
+        <Pressable onPress={() => navigation.navigate('Login')}>
+          <Text variant="labelStrong" color="primary">Log in</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
@@ -110,7 +125,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: theme.spacing.xxl + theme.spacing.base,
+    marginBottom: theme.spacing.xxl,
     gap: theme.spacing.xs,
   },
   stripe: {
