@@ -8,7 +8,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Audio } from 'expo-av';
+import {
+  useAudioRecorder,
+  RecordingPresets,
+  requestRecordingPermissionsAsync,
+  setAudioModeAsync,
+} from 'expo-audio';
 import * as Haptics from 'expo-haptics';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../theme/theme';
@@ -32,8 +37,6 @@ type RecordState =
   | 'error_mcp'
   | 'permission_denied';
 
-const recordingOptions = Audio.RecordingOptionsPresets.HIGH_QUALITY;
-
 const NUM_BARS = 8;
 const MAX_RECORDING_SECONDS = 60;
 const WARN_AT_SECONDS = 55;
@@ -49,7 +52,7 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   const [contacts, setContacts] = useState(selectedContacts);
   const [showTextModal, setShowTextModal] = useState(false);
 
-  const recordingRef = useRef<Audio.Recording | null>(null);
+  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const waveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const cancelledRef = useRef(false);
@@ -75,8 +78,8 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
     return () => {
       stopWaveAnimation();
       if (timerRef.current) clearInterval(timerRef.current);
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync().catch(() => {});
+      if (recorder.isRecording) {
+        recorder.stop().catch(() => {});
       }
     };
   }, []);
@@ -124,11 +127,11 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   const handleStartRecording = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     try {
-      const { status } = await Audio.requestPermissionsAsync();
-      if (status !== 'granted') { setRecordStateSync('permission_denied'); return; }
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: true, playsInSilentModeIOS: true });
-      const { recording } = await Audio.Recording.createAsync(recordingOptions);
-      recordingRef.current = recording;
+      const { granted } = await requestRecordingPermissionsAsync();
+      if (!granted) { setRecordStateSync('permission_denied'); return; }
+      await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
+      await recorder.prepareToRecordAsync();
+      recorder.record();
       setRecordStateSync('recording');
       startTimer();
       startWaveAnimation();
@@ -142,13 +145,10 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     stopTimer();
     stopWaveAnimation();
-    const recording = recordingRef.current;
-    if (!recording) return;
     try {
-      await recording.stopAndUnloadAsync();
-      await Audio.setAudioModeAsync({ allowsRecordingIOS: false });
-      const uri = recording.getURI() ?? '';
-      recordingRef.current = null;
+      await recorder.stop();
+      await setAudioModeAsync({ allowsRecording: false });
+      const uri = recorder.uri ?? '';
       await processAudio(uri);
     } catch {
       setRecordStateSync('error_stt');

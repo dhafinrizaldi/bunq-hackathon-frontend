@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system/legacy';
 import * as api from '../api/client';
 
 const STORAGE_KEY = 'agent_conversation_v1';
@@ -11,6 +12,7 @@ export interface ConversationMessage {
   content: string;
   state: 'sent' | 'sending' | 'received' | 'failed';
   timestamp: number;
+  imageUri?: string;    // local URI for display in user bubbles
   _retryQuery?: string; // stored on agent messages so retry knows what to re-send
 }
 
@@ -54,31 +56,44 @@ export function useConversation() {
   );
 
   const sendMessage = useCallback(
-    async (text: string) => {
+    async (text: string, imageUri?: string) => {
       const trimmed = text.trim();
-      if (!trimmed) return;
+      if (!trimmed && !imageUri) return;
+
+      let imageBase64: string | undefined;
+      if (imageUri) {
+        try {
+          imageBase64 = await FileSystem.readAsStringAsync(imageUri, {
+            encoding: 'base64',
+          });
+        } catch {
+          // proceed without image if encoding fails
+        }
+      }
 
       const userMsg: ConversationMessage = {
         id: uid(),
         role: 'user',
-        content: trimmed,
+        content: trimmed || 'Compare my grocery receipt',
         state: 'sent',
         timestamp: Date.now(),
+        imageUri,
       };
       const agentMsgId = uid();
+      const query = trimmed || 'Compare my grocery receipt';
       const agentMsg: ConversationMessage = {
         id: agentMsgId,
         role: 'agent',
         content: '',
         state: 'sending',
         timestamp: Date.now() + 1,
-        _retryQuery: trimmed,
+        _retryQuery: query,
       };
 
       updateMessages(prev => [...prev, userMsg, agentMsg]);
 
       try {
-        const { response } = await api.askAgent(trimmed);
+        const { response } = await api.askAgent(query, imageBase64);
         updateMessages(prev =>
           prev.map(m =>
             m.id === agentMsgId ? { ...m, content: response, state: 'received' } : m

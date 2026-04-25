@@ -39,8 +39,8 @@ export default function AgentScreen() {
     return () => clearTimeout(timer);
   }, [messages, loaded]);
 
-  const handleSend = useCallback((text: string) => { sendMessage(text); }, [sendMessage]);
-  const handleSuggestion = useCallback((text: string) => { sendMessage(text); }, [sendMessage]);
+  const handleSend = useCallback((text: string, imageUri?: string) => { sendMessage(text, imageUri); }, [sendMessage]);
+  const handleSuggestion = useCallback((text: string, imageUri?: string) => { sendMessage(text, imageUri); }, [sendMessage]);
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>

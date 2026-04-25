@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from '../../theme/theme';
 import type { ConversationMessage } from '../../hooks/useConversation';
 import { TypingIndicator } from './TypingIndicator';
@@ -32,9 +32,14 @@ export function MessageBubble({ message, onRetry }: Props) {
             </Pressable>
           </View>
         ) : (
-          <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAgent]}>
-            {message.content}
-          </Text>
+          <>
+            {isUser && message.imageUri && (
+              <Image source={{ uri: message.imageUri }} style={styles.imageThumbnail} resizeMode="cover" />
+            )}
+            <Text style={[styles.content, isUser ? styles.contentUser : styles.contentAgent]}>
+              {message.content}
+            </Text>
+          </>
         )}
       </View>
       <Text style={[styles.timestamp, isUser ? styles.timestampUser : styles.timestampAgent]}>
@@ -68,6 +73,12 @@ const styles = StyleSheet.create({
   bubbleAgent: {
     backgroundColor: theme.colors.bgRaised,
     borderBottomLeftRadius: 4,
+  },
+  imageThumbnail: {
+    width: 220,
+    height: 140,
+    borderRadius: 12,
+    marginBottom: theme.spacing.xs,
   },
   content: {
     fontSize: 15,
