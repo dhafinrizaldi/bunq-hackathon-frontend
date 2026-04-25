@@ -188,11 +188,25 @@ export async function parseSplitFromTranscript(
     console.log('[mcp] Sending query:', query);
   }
 
-  const res = await fetch(`${MCP_BASE}/query`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${MCP_BASE}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err?.name === 'AbortError') {
+      throw new Error('MCP query timed out after 45s — is the MCP server running?');
+    }
+    throw err;
+  }
+  clearTimeout(timeout);
 
   if (!res.ok) {
     throw new Error(`MCP query failed: ${res.status}`);

@@ -34,32 +34,10 @@ type RecordState =
   | 'error_mcp'
   | 'permission_denied';
 
-const recordingOptions: Audio.RecordingOptions = {
-  isMeteringEnabled: false,
-  android: {
-    extension: '.m4a',
-    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-    sampleRate: 16000,
-    numberOfChannels: 1,
-    bitRate: 64000,
-  },
-  ios: {
-    extension: '.m4a',
-    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-    audioQuality: Audio.IOSAudioQuality.MEDIUM,
-    sampleRate: 16000,
-    numberOfChannels: 1,
-    bitRate: 64000,
-    linearPCMBitDepth: 16,
-    linearPCMIsBigEndian: false,
-    linearPCMIsFloat: false,
-  },
-  web: {
-    mimeType: 'audio/webm',
-    bitsPerSecond: 64000,
-  },
-};
+// HIGH_QUALITY preset: 44.1kHz stereo AAC → .m4a — accepted by Groq Whisper.
+// Custom 16kHz/mono options caused "recorder not prepared" on iOS because not all
+// hardware supports low-rate mono AAC. Whisper downsamples to 16kHz internally anyway.
+const recordingOptions = Audio.RecordingOptionsPresets.HIGH_QUALITY;
 
 const NUM_BARS = 8;
 const MAX_RECORDING_SECONDS = 60;
@@ -81,10 +59,19 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   const waveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Set to true when user cancels during transcript_ready to abort the MCP call
   const cancelledRef = useRef(false);
+  // Mirrors recordState in a ref so the auto-stop timer can read current state
+  // without a stale closure (setState updaters must be pure; can't call async fns inside them)
+  const recordStateRef = useRef<RecordState>('idle');
+  const handleStopRecordingRef = useRef<(() => void) | null>(null);
 
   const bars = useRef(
     Array.from({ length: NUM_BARS }, () => new Animated.Value(0.15))
   ).current;
+
+  const setRecordStateSync = (next: RecordState) => {
+    recordStateRef.current = next;
+    setRecordState(next);
+  };
 
   useEffect(() => {
     if (mode === 'even') {
@@ -132,11 +119,16 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
     setElapsedSeconds(0);
     timerRef.current = setInterval(() => {
       setElapsedSeconds(s => {
-        if (s + 1 >= MAX_RECORDING_SECONDS) {
-          handleStopRecording();
+        const next = s + 1;
+        if (next >= MAX_RECORDING_SECONDS) {
+          // Read current state via ref — avoids stale closure inside setState updater
+          if (recordStateRef.current === 'recording') {
+            // Schedule stop outside the updater to keep it pure
+            setTimeout(() => handleStopRecordingRef.current?.(), 0);
+          }
           return MAX_RECORDING_SECONDS;
         }
-        return s + 1;
+        return next;
       });
     }, 1000);
   };
@@ -151,29 +143,33 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   const handleStartRecording = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    const { status } = await Audio.requestPermissionsAsync();
-    if (status !== 'granted') {
-      setRecordState('permission_denied');
-      return;
+    try {
+      const { status } = await Audio.requestPermissionsAsync();
+      if (status !== 'granted') {
+        setRecordStateSync('permission_denied');
+        return;
+      }
+
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+
+      // createAsync handles prepareToRecordAsync + startAsync internally
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
+
+      recordingRef.current = recording;
+      setRecordStateSync('recording');
+      startTimer();
+      startWaveAnimation();
+    } catch (err) {
+      console.error('[voice] Failed to start recording:', err);
+      setRecordStateSync('error_stt');
     }
-
-    await Audio.setAudioModeAsync({
-      allowsRecordingIOS: true,
-      playsInSilentModeIOS: true,
-    });
-
-    const recording = new Audio.Recording();
-    await recording.prepareToRecordAsync(recordingOptions);
-    await recording.startAsync();
-
-    recordingRef.current = recording;
-    setRecordState('recording');
-    startTimer();
-    startWaveAnimation();
   };
 
   const handleStopRecording = async () => {
-    if (recordState !== 'recording') return;
+    if (recordStateRef.current !== 'recording') return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
     stopTimer();
@@ -190,25 +186,28 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
 
       await processAudio(uri);
     } catch {
-      setRecordState('error_stt');
+      setRecordStateSync('error_stt');
     }
   };
 
+  // Keep a stable ref so the auto-stop timer can always call the latest version
+  handleStopRecordingRef.current = handleStopRecording;
+
   const processAudio = async (uri: string) => {
     // Step 1: transcribe
-    setRecordState('transcribing');
+    setRecordStateSync('transcribing');
     let t: string;
     try {
       const result = await api.transcribeAudio(uri);
       t = result.transcript;
     } catch {
-      setRecordState('error_stt');
+      setRecordStateSync('error_stt');
       return;
     }
 
     // Brief transcript preview — user can cancel before MCP fires
     setTranscript(t);
-    setRecordState('transcript_ready');
+    setRecordStateSync('transcript_ready');
     cancelledRef.current = false;
 
     await new Promise(resolve => setTimeout(resolve, 1500));
@@ -219,7 +218,7 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   };
 
   const processParsing = async (t: string) => {
-    setRecordState('understanding');
+    setRecordStateSync('understanding');
     const contextContacts = mode === 'even' ? contacts : selectedContacts;
 
     try {
@@ -233,9 +232,12 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
       });
 
       if (parsed === null) {
-        setRecordState('error_mcp');
+        setRecordStateSync('error_mcp');
         return;
       }
+
+      // User may have cancelled while MCP was in flight
+      if (cancelledRef.current) return;
 
       if (parsed.mode === 'even') {
         const otherIds = parsed.participantIds.filter(id => id !== mockUser.id);
@@ -250,7 +252,9 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
         navigation.navigate('ItemAssignment');
       }
     } catch {
-      setRecordState('error_mcp');
+      if (!cancelledRef.current) {
+        setRecordStateSync('error_mcp');
+      }
     }
   };
 
@@ -260,7 +264,7 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
   };
 
   const handleReset = () => {
-    setRecordState('idle');
+    setRecordStateSync('idle');
     setElapsedSeconds(0);
     setTranscript(null);
   };
@@ -380,6 +384,14 @@ export default function VoiceRecordScreen({ navigation, route }: Props) {
             <Text style={styles.processingText}>
               {recordState === 'transcribing' ? 'Transcribing…' : 'Understanding…'}
             </Text>
+            {recordState === 'understanding' && (
+              <Pressable
+                style={({ pressed }) => [styles.cancelTranscriptButton, { opacity: pressed ? 0.7 : 1 }]}
+                onPress={handleCancelTranscript}
+              >
+                <Text style={styles.cancelTranscriptText}>Cancel</Text>
+              </Pressable>
+            )}
           </View>
         )}
 

@@ -1,5 +1,3 @@
-import * as FileSystem from 'expo-file-system';
-
 const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY;
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
@@ -16,17 +14,8 @@ export async function transcribeAudio(audioUri: string): Promise<TranscriptionRe
     throw new Error('EXPO_PUBLIC_GROQ_API_KEY not configured');
   }
 
-  const info = await FileSystem.getInfoAsync(audioUri);
-  if (!info.exists) {
-    throw new Error('Audio file not found');
-  }
-  if (info.size && info.size > 25 * 1024 * 1024) {
-    throw new Error('Audio file too large (max 25 MB)');
-  }
-
   if (__DEV__) {
     console.log('[stt] Uploading', audioUri);
-    console.log('[stt] File size:', info.size, 'bytes');
   }
 
   const startTime = Date.now();
