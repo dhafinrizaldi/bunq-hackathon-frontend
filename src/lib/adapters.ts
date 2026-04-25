@@ -13,14 +13,12 @@ import type {
 import type { SplitRequest } from '../api/client';
 import { decimalStringToCents, centsToDecimalString, splitCentsEvenly } from './money';
 
-// TODO: CONFIRM-BACKEND Q3 — verify these status code mappings with backend team
 const SESSION_STATUS_MAP: Record<string, PendingSplit['status']> = {
   CO: 'completed',
   PE: 'pending',
   CA: 'cancelled',
 };
 
-// TODO: CONFIRM-BACKEND Q3 — FA = declined or failed?
 const PAYMENT_STATUS_MAP: Record<string, Participant['status']> = {
   PA: 'paid',
   PE: 'pending',
@@ -34,8 +32,7 @@ export function adaptSessionSummaryToPendingSplit(
     id: String(api.id),
     merchantName: api.merchant_name,
     totalAmount: decimalStringToCents(api.total_amount),
-    // TODO: CONFIRM-BACKEND Q8 — currency not in summary response; assuming EUR
-    currency: 'EUR',
+    currency: 'EUR', // not in summary response — assumed EUR until detail is fetched
     createdAt: api.date,
     isFullyPaid: api.is_fully_paid,
     participants: [],  // not in summary — populated when detail is fetched
@@ -57,7 +54,7 @@ export function adaptSessionDetailToPendingSplit(
     currency: api.transaction.currency,
     createdAt: api.created_at,
     isFullyPaid: api.is_fully_paid,
-    status: SESSION_STATUS_MAP[api.is_fully_paid ? 'CO' : 'PE'],
+    status: SESSION_STATUS_MAP[api.status],
     participants,
     transactionId: String(api.transaction.id),
     userPrompt: api.user_prompt ?? undefined,

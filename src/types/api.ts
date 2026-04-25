@@ -4,74 +4,88 @@
 export interface ApiSessionSummary {
   id: number;
   merchant_name: string;
-  total_amount: string;    // decimal string, e.g. "47.80"
-  date: string;            // ISO date string
+  total_amount: string;    // decimal string, e.g. "45.50"
+  date: string;            // ISO datetime string
   is_fully_paid: boolean;
 }
 
 export interface ApiTransaction {
   id: number;
+  initiator: number;       // user id of the session creator
   merchant_name: string;
   total_amount: string;    // decimal string
   currency: string;
+  date: string;            // ISO datetime string
 }
 
 export interface ApiAllocation {
-  participant: number;         // participant user id
+  id: number;
+  item: number;            // item id
+  participant: number;     // participant id (not user id)
   participant_email: string;
-  allocated_amount: string;    // decimal string
+  allocated_amount: string; // decimal string
 }
 
 export interface ApiItem {
   id: number;
   description: string;
-  total_price: string;         // decimal string — total for this line (unit × qty)
+  total_price: string;     // decimal string — total for this line (unit × qty)
   quantity: number;
   allocations: ApiAllocation[];
   // Empty allocations → item belongs to the payee (current user)
 }
 
+export interface ApiParticipant {
+  id: number;
+  user: number;            // user id
+  user_email: string;
+}
+
 export interface ApiPaymentRequest {
-  payer: number;               // user id of the person who owes money
+  id: number;
+  payer: number;           // user id of the person who owes money
   payer_email: string;
-  amount: string;              // decimal string
-  // TODO: CONFIRM-BACKEND Q3 — are status codes definitively CO/PE/CA for sessions and PA/PE/FA for payments?
-  status: string;              // 'PA' = paid, 'PE' = pending, 'FA' = failed/declined
+  payee: number;           // user id of the person who is owed
+  payee_email: string;
+  amount: string;          // decimal string
+  bunq_request_id: string;
+  status: string;          // 'PA' = paid, 'PE' = pending, 'FA' = failed/declined
+  created_at: string;      // ISO datetime string
 }
 
 export interface ApiSessionDetail {
   id: number;
-  created_at: string;          // ISO datetime
-  is_fully_paid: boolean;
   transaction: ApiTransaction;
-  payment_requests: ApiPaymentRequest[];
-  // TODO: CONFIRM-BACKEND Q5 — is user_prompt the right field name for the note/voice transcript?
-  user_prompt: string | null;
   receipt_image: string | null;
+  user_prompt: string | null;
+  status: string;          // 'CO' = completed, 'PE' = pending, 'CA' = cancelled
+  ai_raw_response: unknown; // debugging artifact — not used by the app
+  participants: ApiParticipant[];
   items: ApiItem[];
-  // ai_raw_response intentionally omitted — debugging artifact only
+  payment_requests: ApiPaymentRequest[];
+  is_fully_paid: boolean;
+  created_at: string;      // ISO datetime string
+  updated_at: string;      // ISO datetime string
 }
 
 // ─── POST /api/sessions/ payload ──────────────────────────────────
 
 export interface ApiCreateAllocation {
   participant_email: string;
-  allocated_amount: string;    // decimal string
+  allocated_amount: string; // decimal string
 }
 
 export interface ApiCreateItem {
   description: string;
-  total_price: string;         // decimal string
+  total_price: string;     // decimal string
   quantity: number;
   allocations: ApiCreateAllocation[];
 }
 
 export interface ApiCreateSessionPayload {
-  // TODO: CONFIRM-BACKEND Q1 — auth scheme (bearer token? cookie?)
-  // TODO: CONFIRM-BACKEND Q5 — confirm exact POST field names before shipping
   transaction_id: number;
   participant_emails: string[];
   user_prompt?: string;
   items: ApiCreateItem[];
-  // TODO: CONFIRM-BACKEND Q6 — receipt image: base64 in body, multipart, or separate upload?
+  // TODO: CONFIRM-BACKEND — receipt image: base64 in body, multipart, or separate upload?
 }

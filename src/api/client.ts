@@ -322,21 +322,24 @@ export async function getProfileInsights(): Promise<{ response: string }> {
 
 // ─── Agent chat ───────────────────────────────────────────────────
 
-export async function askAgent(query: string): Promise<{ response: string }> {
+export async function askAgent(query: string, imageBase64?: string): Promise<{ response: string }> {
   if (!USE_REAL_MCP) {
     await delay(800);
-    return { response: mockAgentResponse(query) };
+    return { response: mockAgentResponse(query, imageBase64) };
   }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45_000);
+
+  const body: { query: string; image_base64?: string } = { query };
+  if (imageBase64) body.image_base64 = imageBase64;
 
   let res: Response;
   try {
     res = await fetch(`${MCP_BASE}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
   } catch (err: any) {
@@ -350,7 +353,10 @@ export async function askAgent(query: string): Promise<{ response: string }> {
   return res.json();
 }
 
-function mockAgentResponse(query: string): string {
+function mockAgentResponse(query: string, imageBase64?: string): string {
+  if (imageBase64) {
+    return "I checked your receipt against average Amsterdam prices.\n\n• Broccoli (€1.89) — good, avg €2.10\n• Chicken breast 500g (€4.99) — slightly high, avg €4.50 at Lidl\n• Greek yoghurt (€1.79) — fair price\n• Pasta 500g (€1.49) — good deal\n• Olive oil 500ml (€5.49) — high, avg €4.20. Try Lidl or Jumbo.\n\nOverall your basket was about 8% above typical prices. Biggest saving opportunity: olive oil and chicken.";
+  }
   const q = query.toLowerCase();
   if (q.includes('spend') || q.includes('spent')) {
     return "You spent €432.50 across 18 transactions this month. Most was on dining (€187), followed by bars (€94) and transport (€51).";
