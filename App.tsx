@@ -1,7 +1,5 @@
-import { BASE_URL } from "./src/api";
-import LoginPage from "./src/screens/LoginPage";
+import AppNavigator from './src/navigation/AppNavigator';
 
 export default function App() {
-  console.log(BASE_URL);
-  return <LoginPage />;
+  return <AppNavigator />;
 }
