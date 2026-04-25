@@ -15,6 +15,8 @@ import ItemAssignmentScreen from '../screens/ItemAssignmentScreen';
 import SpecifySplitConfirmScreen from '../screens/SpecifySplitConfirmScreen';
 import VoiceRecordScreen from '../screens/VoiceRecordScreen';
 import SessionDetailScreen from '../screens/SessionDetailScreen';
+import LoginPage from '../screens/LoginPage';
+import RegisterPage from '../screens/RegisterPage';
 import type { TabParamList, RootStackParamList, SplitFlowParamList } from './types';
 
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -79,6 +81,8 @@ export default function AppNavigator() {
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="Login" component={LoginPage} />
+        <Stack.Screen name="Register" component={RegisterPage} />
         <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen
           name="SplitFlowStack"

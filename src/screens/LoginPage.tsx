@@ -1,6 +1,8 @@
 import { StatusBar } from 'expo-status-bar';
 import { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -9,14 +11,33 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
+import { loginUser } from '../api/client';
 
-export default function LoginPage() {
+type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
+
+export default function LoginPage({ navigation }: Props) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = () => {
-    // TODO: wire up auth
-    console.log('Login', { email, password });
+  const handleLogin = async () => {
+    if (!email || !password) {
+      Alert.alert('Missing fields', 'Please enter your email and password.');
+      return;
+    }
+    setLoading(true);
+    try {
+      await loginUser({ email, password });
+      navigation.replace('MainTabs');
+    } catch (err: any) {
+      const message =
+        err?.response?.data?.detail ?? 'Login failed. Please try again.';
+      Alert.alert('Error', message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -58,8 +79,13 @@ export default function LoginPage() {
         <Pressable
           style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           onPress={handleLogin}
+          disabled={loading}
         >
-          <Text style={styles.buttonText}>Log in</Text>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Log in</Text>
+          )}
         </Pressable>
 
         <Pressable style={styles.forgotWrapper}>
@@ -69,7 +95,7 @@ export default function LoginPage() {
 
       <View style={styles.footer}>
         <Text style={styles.footerText}>Don't have an account? </Text>
-        <Pressable>
+        <Pressable onPress={() => navigation.navigate('Register')}>
           <Text style={styles.footerLink}>Sign up</Text>
         </Pressable>
       </View>

@@ -22,6 +22,8 @@ export type SplitFlowParamList = {
 };
 
 export type RootStackParamList = {
+  Login: undefined;
+  Register: undefined;
   MainTabs: undefined;
   SplitFlowStack: NavigatorScreenParams<SplitFlowParamList>;
   SessionDetail: { splitId: string };
