@@ -105,7 +105,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: theme.colors.divider,
+    backgroundColor: theme.colors.bgElevated,
     alignSelf: 'center',
     marginBottom: theme.spacing.sm,
   },
@@ -141,8 +141,8 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     flex: 2,
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.accents.cyan,
+    borderRadius: theme.radii.full,
     paddingVertical: theme.spacing.md,
     alignItems: 'center',
     minHeight: 48,
@@ -153,6 +153,6 @@ const styles = StyleSheet.create({
   },
   submitText: {
     ...theme.typography.bodyStrong,
-    color: theme.colors.onAccent,
+    color: '#000000',
   },
 });

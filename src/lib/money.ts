@@ -1,10 +1,11 @@
 // "47.80" → 4780  (backend amounts come as decimal strings)
 export function decimalStringToCents(str: string): number {
-  return Math.round(parseFloat(str) * 100);
+  return Math.round((parseFloat(str) || 0) * 100);
 }
 // decimalStringToCents("47.80") → 4780 ✓
 // decimalStringToCents("0.01") → 1 ✓
 // decimalStringToCents("100.00") → 10000 ✓
+// decimalStringToCents("") → 0 ✓
 
 // 4780 → "47.80"  (API POST body requires decimal strings)
 export function centsToDecimalString(cents: number): string {

@@ -1,18 +1,16 @@
 import { useMemo, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TextInput,
   Pressable,
-  Image,
   ActivityIndicator,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { theme } from '../theme/theme';
+import { theme, accentForKey } from '../theme/theme';
 import type { Contact } from '../types/types';
 import type { SplitFlowParamList } from '../navigation/types';
 import { useSplitFlow } from '../context/SplitFlowContext';
@@ -21,6 +19,10 @@ import { splitCentsEvenly, formatCents } from '../lib/money';
 import * as api from '../api/client';
 import { FlowHeader } from '../components/FlowHeader';
 import { TransactionSummaryCard } from '../components/TransactionSummaryCard';
+import { Text } from '../components/ui/Text';
+import { Money } from '../components/ui/Money';
+import { Button } from '../components/ui/Button';
+import { CategoryIcon } from '../components/ui/CategoryIcon';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'SpecifySplitConfirm'>;
 
@@ -31,7 +33,6 @@ const CURRENT_USER: Contact = {
   avatarUrl: mockUser.avatarUrl,
 };
 
-// ─── Expandable person card ────────────────────────────────────
 interface PersonCardProps {
   person: Contact;
   totalCents: number;
@@ -42,30 +43,18 @@ interface PersonCardProps {
 }
 
 function PersonCard({ person, totalCents, currency, itemBreakdown, expanded, onToggle }: PersonCardProps) {
-  const [imgError, setImgError] = useState(false);
+  const accent = accentForKey(person.name);
 
   return (
     <View style={styles.personCard}>
       <Pressable style={styles.personCardHeader} onPress={onToggle}>
-        <View style={styles.personAvatarContainer}>
-          {!imgError ? (
-            <Image
-              source={{ uri: person.avatarUrl }}
-              style={styles.personAvatar}
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <View style={[styles.personAvatar, styles.personAvatarFallback]}>
-              <Text style={styles.personInitial}>{person.name.charAt(0).toUpperCase()}</Text>
-            </View>
-          )}
-        </View>
-        <Text style={styles.personName}>{person.name}</Text>
-        <Text style={styles.personTotal}>{formatCents(totalCents, currency)}</Text>
+        <CategoryIcon initials={person.name.slice(0, 2)} accent={accent} size={36} />
+        <Text variant="bodyStrong" color="primary" style={styles.personName}>{person.name}</Text>
+        <Money amountCents={totalCents} currency={currency} size="small" color={accent} />
         <Ionicons
           name={expanded ? 'chevron-up' : 'chevron-down'}
           size={16}
-          color={theme.colors.textSecondary}
+          color={theme.colors.textTertiary}
         />
       </Pressable>
 
@@ -73,10 +62,10 @@ function PersonCard({ person, totalCents, currency, itemBreakdown, expanded, onT
         <View style={styles.breakdown}>
           {itemBreakdown.map((row, i) => (
             <View key={i} style={styles.breakdownRow}>
-              <Text style={styles.breakdownName} numberOfLines={1}>
+              <Text variant="label" color="secondary" style={styles.breakdownName} numberOfLines={1}>
                 {row.name}{row.splitN > 1 ? ` (÷${row.splitN})` : ''}
               </Text>
-              <Text style={styles.breakdownAmount}>{formatCents(row.shareCents, currency)}</Text>
+              <Text variant="labelStrong" color="secondary">{formatCents(row.shareCents, currency)}</Text>
             </View>
           ))}
         </View>
@@ -85,7 +74,6 @@ function PersonCard({ person, totalCents, currency, itemBreakdown, expanded, onT
   );
 }
 
-// ─── Main screen ───────────────────────────────────────────────
 export default function SpecifySplitConfirmScreen({ navigation }: Props) {
   const { state, dispatch } = useSplitFlow();
   const { transaction, selectedContacts, items, assignments, note } = state;
@@ -101,7 +89,6 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
     [selectedContacts]
   );
 
-  // Per-person totals (cents)
   const personTotals = useMemo(() => {
     const totals: Record<string, number> = {};
     for (const person of allPeople) {
@@ -127,7 +114,6 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
 
   const unassignedCents = receiptTotal - assignedTotal;
 
-  // Item breakdown per person
   const getBreakdown = (personId: string) =>
     items
       .map(item => {
@@ -190,7 +176,7 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
       <SafeAreaView style={styles.container}>
         <FlowHeader title="Confirm split" onBack={() => navigation.goBack()} onClose={handleClose} />
         <View style={styles.centered}>
-          <ActivityIndicator color={theme.colors.accentPrimary} size="large" />
+          <ActivityIndicator color={theme.colors.accents.cyan} size="large" />
         </View>
       </SafeAreaView>
     );
@@ -200,18 +186,13 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.successContainer}>
-          <Ionicons name="checkmark-circle" size={80} color={theme.colors.accentPrimary} />
-          <Text style={styles.successTitle}>Requests sent!</Text>
-          <Text style={styles.successSub}>
+          <Ionicons name="checkmark-circle" size={80} color={theme.colors.accents.cyan} />
+          <Text variant="title" color="primary" style={styles.successTitle}>Requests sent!</Text>
+          <Text variant="body" color="secondary" style={styles.successSub}>
             Payment requests sent to {selectedContacts.length}{' '}
             {selectedContacts.length === 1 ? 'person' : 'people'} via bunq
           </Text>
-          <Pressable
-            style={({ pressed }) => [styles.doneButton, { opacity: pressed ? 0.85 : 1 }]}
-            onPress={handleClose}
-          >
-            <Text style={styles.doneButtonText}>Done</Text>
-          </Pressable>
+          <Button label="Done" onPress={handleClose} variant="accent" accent="cyan" fullWidth={false} style={styles.doneBtn} />
         </View>
       </SafeAreaView>
     );
@@ -233,17 +214,15 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
       >
         <TransactionSummaryCard transaction={transaction} />
 
-        {/* Unassigned warning banner */}
         {unassignedCents > 0 && (
           <View style={styles.warningBanner}>
             <Ionicons name="warning-outline" size={14} color={theme.colors.negative} />
-            <Text style={styles.warningText}>
+            <Text variant="label" color="negative" style={styles.flex1}>
               {formatCents(unassignedCents, currency)} unassigned — added to your share
             </Text>
           </View>
         )}
 
-        {/* Per-person cards */}
         <View style={styles.personList}>
           {allPeople.map(person => {
             const isCurrentUser = person.id === mockUser.id;
@@ -263,39 +242,33 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
           })}
         </View>
 
-        {/* Receipt total summary */}
         <View style={styles.totalRow}>
-          <Text style={styles.totalLabel}>Receipt total</Text>
-          <Text style={styles.totalValue}>{formatCents(receiptTotal, currency)}</Text>
+          <Text variant="label" color="secondary">Receipt total</Text>
+          <Text variant="labelStrong" color="primary">{formatCents(receiptTotal, currency)}</Text>
         </View>
 
-        {/* Note field */}
         <TextInput
           style={styles.noteInput}
           value={note}
           onChangeText={text => dispatch({ type: 'SET_NOTE', note: text })}
           placeholder={`Dinner at ${transaction.merchantName}`}
-          placeholderTextColor={theme.colors.textSecondary}
+          placeholderTextColor={theme.colors.textTertiary}
           maxLength={140}
         />
       </ScrollView>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + theme.spacing.base }]}>
-        <Text style={styles.disclaimer}>
-          You'll send payment requests to {selectedContacts.length}{' '}
+        <Text variant="label" color="tertiary" style={styles.disclaimer}>
+          Sending requests to {selectedContacts.length}{' '}
           {selectedContacts.length === 1 ? 'person' : 'people'} via bunq
         </Text>
-        <Pressable
-          style={({ pressed }) => [styles.sendButton, { opacity: pressed ? 0.85 : 1 }]}
+        <Button
+          label="Send requests"
           onPress={handleSubmit}
-          disabled={submitting}
-        >
-          {submitting ? (
-            <ActivityIndicator color="#0A0A0A" />
-          ) : (
-            <Text style={styles.sendButtonText}>Send requests</Text>
-          )}
-        </Pressable>
+          variant="accent"
+          accent="cyan"
+          loading={submitting}
+        />
       </View>
     </SafeAreaView>
   );
@@ -304,7 +277,7 @@ export default function SpecifySplitConfirmScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   centered: {
     flex: 1,
@@ -319,33 +292,16 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   successTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 24,
-    fontWeight: theme.fonts.weights.bold,
     marginTop: theme.spacing.base,
   },
   successSub: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
     textAlign: 'center',
   },
-  doneButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
-    paddingHorizontal: theme.spacing.xxl,
-    paddingVertical: theme.spacing.md,
+  doneBtn: {
     marginTop: theme.spacing.xl,
-    minHeight: 44,
-    justifyContent: 'center',
+    width: 200,
   },
-  doneButtonText: {
-    color: '#0A0A0A',
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.bold,
-  },
-  scroll: {
-    flex: 1,
-  },
+  scroll: { flex: 1 },
   scrollContent: {
     paddingHorizontal: theme.spacing.xl,
   },
@@ -353,15 +309,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    backgroundColor: 'rgba(255,92,92,0.12)',
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.negativeSoft,
+    borderRadius: theme.radii.sm,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.sm,
     marginTop: theme.spacing.sm,
   },
-  warningText: {
-    color: theme.colors.negative,
-    fontSize: 13,
+  flex1: {
     flex: 1,
   },
   personList: {
@@ -369,8 +323,8 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   personCard: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.card,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.lg,
     overflow: 'hidden',
   },
   personCardHeader: {
@@ -379,41 +333,12 @@ const styles = StyleSheet.create({
     padding: theme.spacing.base,
     gap: theme.spacing.sm,
   },
-  personAvatarContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    overflow: 'hidden',
-  },
-  personAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-  },
-  personAvatarFallback: {
-    backgroundColor: theme.colors.surfaceElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  personInitial: {
-    color: theme.colors.textPrimary,
-    fontSize: 14,
-    fontWeight: theme.fonts.weights.bold,
-  },
   personName: {
     flex: 1,
-    color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.semibold,
-  },
-  personTotal: {
-    color: theme.colors.textPrimary,
-    fontSize: 15,
-    fontWeight: theme.fonts.weights.bold,
   },
   breakdown: {
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: theme.colors.bgElevated,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.sm,
     gap: theme.spacing.xs,
@@ -425,68 +350,37 @@ const styles = StyleSheet.create({
   },
   breakdownName: {
     flex: 1,
-    color: theme.colors.textSecondary,
-    fontSize: 13,
-  },
-  breakdownAmount: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
-    fontWeight: theme.fonts.weights.semibold,
   },
   totalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: theme.spacing.base,
     borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    borderTopColor: theme.colors.bgRaised,
     marginTop: theme.spacing.sm,
   },
-  totalLabel: {
-    color: theme.colors.textSecondary,
-    fontSize: 13,
-  },
-  totalValue: {
-    color: theme.colors.textPrimary,
-    fontSize: 13,
-    fontWeight: theme.fonts.weights.semibold,
-  },
   noteInput: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.full,
     padding: theme.spacing.base,
+    paddingHorizontal: theme.spacing.lg,
     color: theme.colors.textPrimary,
     fontSize: 15,
     marginTop: theme.spacing.sm,
-    minHeight: 44,
+    minHeight: 48,
   },
   bottomBar: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: theme.colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: theme.colors.border,
+    backgroundColor: theme.colors.bgRaised,
     paddingHorizontal: theme.spacing.xl,
     paddingTop: theme.spacing.base,
     gap: theme.spacing.sm,
   },
   disclaimer: {
-    color: theme.colors.textSecondary,
-    fontSize: 12,
     textAlign: 'center',
-  },
-  sendButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
-    paddingVertical: theme.spacing.md,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sendButtonText: {
-    color: '#0A0A0A',
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.bold,
   },
 });

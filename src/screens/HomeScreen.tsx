@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, ScrollView, ActivityIndicator, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { theme } from '../theme/theme';
+import { theme, accentForKey } from '../theme/theme';
 import type { Transaction, PendingSplit } from '../types/types';
 import type { TabParamList, RootStackParamList } from '../navigation/types';
 import { mockTransactions } from '../mocks/mockTransactions';
@@ -14,6 +14,9 @@ import { TransactionRow } from '../components/TransactionRow';
 import { PendingSplitRow } from '../components/PendingSplitRow';
 import { SectionHeader } from '../components/SectionHeader';
 import { Fab } from '../components/Fab';
+import { Text } from '../components/ui/Text';
+import { RainbowStripe } from '../components/ui/RainbowStripe';
+import { CategoryIcon } from '../components/ui/CategoryIcon';
 
 type HomeScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<TabParamList, 'Home'>,
@@ -41,9 +44,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     });
   };
 
-  const handleLongPressTransaction = (transaction: Transaction) => {
-    console.log('Voice split triggered for transaction:', transaction.id);
-  };
+  const handleLongPressTransaction = (_transaction: Transaction) => {};
 
   const handlePendingSplitPress = (split: PendingSplit) => {
     navigation.navigate('SessionDetail', { splitId: split.id });
@@ -56,23 +57,21 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
     });
   };
 
+  const userAccent = accentForKey(mockUser.name);
+
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Text style={styles.appName}>bunq split</Text>
-          <View style={styles.headerRight}>
-            {/* Inline connection status — micro text, top-right */}
-            <View style={styles.statusRow}>
-              <View style={styles.statusDot} />
-              <Text style={styles.statusText}>Connected</Text>
-            </View>
-            <Pressable style={styles.avatarCircle}>
-              <Text style={styles.avatarText}>
-                {mockUser.name.charAt(0).toUpperCase()}
-              </Text>
-            </Pressable>
+          <View>
+            <Text variant="micro" color="tertiary">bunq split</Text>
+            <Text variant="title" color="primary">Hi, {mockUser.name.split(' ')[0]}</Text>
           </View>
+          <CategoryIcon
+            initials={mockUser.name.slice(0, 2)}
+            accent={userAccent}
+            size={38}
+          />
         </View>
 
         <ScrollView
@@ -92,7 +91,9 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 
           <SectionHeader title="Pending Splits" />
           {splitsLoading ? (
-            <ActivityIndicator color={theme.colors.accentPrimary} style={styles.loader} />
+            <ActivityIndicator color={theme.colors.accents.cyan} style={styles.loader} />
+          ) : pendingSplits.length === 0 ? (
+            <Text variant="label" color="tertiary" style={styles.emptyState}>No pending splits</Text>
           ) : (
             pendingSplits.map(s => (
               <PendingSplitRow
@@ -103,10 +104,11 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
             ))
           )}
 
-          <View style={{ height: 80 }} />
+          <View style={{ height: 100 }} />
         </ScrollView>
       </SafeAreaView>
 
+      <RainbowStripe height={3} />
       <Fab onPress={handleFabPress} />
     </View>
   );
@@ -115,7 +117,7 @@ export default function HomeScreen({ navigation }: HomeScreenProps) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   safeArea: {
     flex: 1,
@@ -128,44 +130,6 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.base,
     paddingBottom: theme.spacing.md,
   },
-  appName: {
-    ...theme.typography.heading,
-    color: theme.colors.textPrimary,
-    fontSize: 22,
-    fontWeight: theme.fonts.weights.bold,
-  },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: theme.colors.positive,
-  },
-  statusText: {
-    ...theme.typography.micro,
-    color: theme.colors.textTertiary,
-  },
-  avatarCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: theme.radii.full,
-    backgroundColor: theme.colors.accentPrimary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarText: {
-    ...theme.typography.labelStrong,
-    color: theme.colors.onAccent,
-  },
   scroll: {
     flex: 1,
   },
@@ -175,5 +139,8 @@ const styles = StyleSheet.create({
   },
   loader: {
     marginTop: theme.spacing.base,
+  },
+  emptyState: {
+    marginTop: theme.spacing.md,
   },
 });

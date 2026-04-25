@@ -11,7 +11,7 @@ import type {
   Participant,
 } from '../types/types';
 import type { SplitRequest } from '../api/client';
-import { decimalStringToCents, centsToDecimalString } from './money';
+import { decimalStringToCents, centsToDecimalString, splitCentsEvenly } from './money';
 
 // TODO: CONFIRM-BACKEND Q3 — verify these status code mappings with backend team
 const SESSION_STATUS_MAP: Record<string, PendingSplit['status']> = {
@@ -126,7 +126,7 @@ export function adaptSplitRequestToApiPayload(
       const assignedIds = assignments[item.id] ?? [];
       const totalCents = item.price * item.quantity;
       const shares = assignedIds.length > 0
-        ? splitShares(totalCents, assignedIds.length)
+        ? splitCentsEvenly(totalCents, assignedIds.length)
         : [];
       return {
         description: item.name,
@@ -142,9 +142,3 @@ export function adaptSplitRequestToApiPayload(
   };
 }
 
-// Integer-safe even split: first (remainder) slots get an extra cent.
-function splitShares(totalCents: number, n: number): number[] {
-  const base = Math.floor(totalCents / n);
-  const remainder = totalCents - base * n;
-  return Array.from({ length: n }, (_, i) => base + (i < remainder ? 1 : 0));
-}

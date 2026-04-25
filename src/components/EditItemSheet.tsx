@@ -150,7 +150,7 @@ const styles = StyleSheet.create({
     right: 0,
   },
   sheet: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: theme.colors.bgElevated,
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: theme.spacing.xl,
@@ -181,7 +181,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.base,
   },
   input: {
-    backgroundColor: theme.colors.surfaceElevated,
+    backgroundColor: theme.colors.bgPressed,
     borderRadius: theme.radii.button,
     paddingHorizontal: theme.spacing.base,
     paddingVertical: theme.spacing.md,
@@ -207,7 +207,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: theme.colors.surfaceElevated,
+    backgroundColor: theme.colors.bgPressed,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -227,8 +227,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   saveButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
+    backgroundColor: theme.colors.accents.cyan,
+    borderRadius: theme.radii.full,
     paddingVertical: theme.spacing.md,
     alignItems: 'center',
     justifyContent: 'center',

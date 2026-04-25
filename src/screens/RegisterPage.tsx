@@ -1,47 +1,47 @@
-import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { StatusBar } from 'expo-status-bar';
+import { useState } from 'react';
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
-  Alert,
-  ActivityIndicator,
-} from "react-native";
-import type { NativeStackScreenProps } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "../navigation/types";
-import { registerUser } from "../api/client";
+} from 'react-native';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/types';
+import { registerUser } from '../api/client';
+import { theme } from '../theme/theme';
+import { Text } from '../components/ui/Text';
+import { RainbowStripe } from '../components/ui/RainbowStripe';
 
-type Props = NativeStackScreenProps<RootStackParamList, "Register">;
+type Props = NativeStackScreenProps<RootStackParamList, 'Register'>;
 
 export default function RegisterPage({ navigation }: Props) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleRegister = async () => {
     if (!email || !password || !confirmPassword) {
-      Alert.alert("Missing fields", "Please fill in all fields.");
+      Alert.alert('Missing fields', 'Please fill in all fields.');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert("Password mismatch", "Passwords do not match.");
+      Alert.alert('Password mismatch', 'Passwords do not match.');
       return;
     }
-
     setLoading(true);
     try {
       await registerUser({ email, password });
-      navigation.replace("MainTabs");
+      navigation.replace('MainTabs');
     } catch (err: any) {
-      console.log("Registration error:", err);
       const message =
-        err?.response?.data?.detail ?? "Registration failed. Please try again.";
-      Alert.alert("Error", message);
+        err?.response?.data?.detail ?? 'Registration failed. Please try again.';
+      Alert.alert('Error', message);
     } finally {
       setLoading(false);
     }
@@ -50,22 +50,22 @@ export default function RegisterPage({ navigation }: Props) {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       <View style={styles.header}>
-        <View style={styles.logoMark} />
-        <Text style={styles.brand}>bunq</Text>
-        <Text style={styles.tagline}>Create your account</Text>
+        <RainbowStripe height={4} style={styles.stripe} />
+        <Text variant="hero" color="primary" style={styles.brand}>bunq</Text>
+        <Text variant="label" color="tertiary">Create your account</Text>
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>Email</Text>
+        <Text variant="micro" color="tertiary" style={styles.fieldLabel}>EMAIL</Text>
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={theme.colors.textTertiary}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
@@ -73,132 +73,102 @@ export default function RegisterPage({ navigation }: Props) {
           onChangeText={setEmail}
         />
 
-        <Text style={styles.label}>Password</Text>
+        <Text variant="micro" color="tertiary" style={[styles.fieldLabel, styles.fieldLabelGap]}>PASSWORD</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
         />
 
-        <Text style={styles.label}>Confirm password</Text>
+        <Text variant="micro" color="tertiary" style={[styles.fieldLabel, styles.fieldLabelGap]}>CONFIRM PASSWORD</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry
           value={confirmPassword}
           onChangeText={setConfirmPassword}
         />
 
         <Pressable
-          style={({ pressed }) => [
-            styles.button,
-            pressed && styles.buttonPressed,
-          ]}
+          style={({ pressed }) => [styles.button, pressed && styles.buttonPressed]}
           onPress={handleRegister}
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#000" />
           ) : (
-            <Text style={styles.buttonText}>Create account</Text>
+            <Text variant="bodyStrong" color="inverse">Create account</Text>
           )}
         </Pressable>
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Already have an account? </Text>
-        <Pressable onPress={() => navigation.navigate("Login")}>
-          <Text style={styles.footerLink}>Log in</Text>
+        <Text variant="label" color="tertiary">Already have an account? </Text>
+        <Pressable onPress={() => navigation.navigate('Login')}>
+          <Text variant="labelStrong" color="primary">Log in</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const BUNQ_GREEN = "#00D48A";
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
-    paddingHorizontal: 28,
-    justifyContent: "center",
+    backgroundColor: theme.colors.bgBase,
+    paddingHorizontal: theme.spacing.xl,
+    justifyContent: 'center',
   },
   header: {
-    alignItems: "center",
-    marginBottom: 48,
+    alignItems: 'center',
+    marginBottom: theme.spacing.xxl,
+    gap: theme.spacing.xs,
   },
-  logoMark: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: BUNQ_GREEN,
-    marginBottom: 12,
+  stripe: {
+    borderRadius: theme.radii.full,
+    marginBottom: theme.spacing.base,
+    width: 48,
+    height: 4,
   },
   brand: {
-    fontSize: 32,
-    fontWeight: "700",
-    color: "#111",
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 14,
-    color: "#888",
-    marginTop: 4,
+    letterSpacing: -1,
   },
   form: {
-    gap: 6,
+    gap: theme.spacing.xs,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#444",
-    marginBottom: 2,
-    marginTop: 12,
+  fieldLabel: {
+    marginBottom: theme.spacing.xs,
+  },
+  fieldLabelGap: {
+    marginTop: theme.spacing.base,
   },
   input: {
-    height: 50,
-    borderWidth: 1.5,
-    borderColor: "#E5E5E5",
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    height: 52,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.base,
     fontSize: 16,
-    color: "#111",
-    backgroundColor: "#FAFAFA",
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
   },
   button: {
-    height: 52,
-    backgroundColor: BUNQ_GREEN,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 24,
+    height: 56,
+    backgroundColor: theme.colors.accents.cyan,
+    borderRadius: theme.radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.base,
   },
   buttonPressed: {
     opacity: 0.85,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
   footer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginTop: 48,
-  },
-  footerText: {
-    fontSize: 14,
-    color: "#888",
-  },
-  footerLink: {
-    fontSize: 14,
-    color: BUNQ_GREEN,
-    fontWeight: "600",
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: theme.spacing.xxl,
   },
 });

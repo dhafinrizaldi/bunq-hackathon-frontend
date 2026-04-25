@@ -14,12 +14,14 @@
     },
     "ios": {
       "supportsTablet": true,
-        "infoPlist": {
-          "NSMicrophoneUsageDescription": "We need the microphone to let you describe splits with your voice."
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "We need the microphone to let you describe splits with your voice."
       }
     },
     "android": {
-      "permissions": ["RECORD_AUDIO"],
+      "permissions": [
+        "RECORD_AUDIO"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -29,6 +31,9 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-font"
+    ]
   }
 }

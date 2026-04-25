@@ -1,4 +1,4 @@
-import type { Transaction, Contact, SplitMode, ParsedReceipt, ParsedSplit, ReceiptItem, PendingSplit } from '../types/types';
+import type { Transaction, Contact, SplitMode, ParsedReceipt, ParsedSplit, ReceiptItem, PendingSplit, MonetaryAccount, BunqUser } from '../types/types';
 import { transcribeAudio as realTranscribe } from '../services/stt';
 import type { ApiSessionSummary, ApiSessionDetail } from '../types/api';
 import { mockTransactions } from '../mocks/mockTransactions';
@@ -37,11 +37,19 @@ async function getAuthToken(): Promise<string | null> {
 }
 
 export const loginUser = async (data: UserAuth) => {
+  if (!USE_REAL_API) {
+    await delay(400);
+    return { email: data.email };
+  }
   const resp = await api.post("auth/login/", data);
   return resp.data;
 };
 
 export const registerUser = async (data: UserAuth) => {
+  if (!USE_REAL_API) {
+    await delay(400);
+    return { email: data.email };
+  }
   const resp = await api.post("auth/register/", data);
   return resp.data;
 };
@@ -126,9 +134,15 @@ export async function getNearbyContacts(
 
 // TODO: CONFIRM-BACKEND — POST /api/receipts/parse
 // Backend will call OCR service (Veryfi, Mindee, or Google Vision).
-export async function parseReceipt(_imageUri: string): Promise<ParsedReceipt> {
-  await delay(300);
-  return mockReceipts["Café de Jaren"] ?? mockReceipts["Default"];
+export async function parseReceipt(_imageUri: string, merchantName?: string): Promise<ParsedReceipt> {
+  if (!USE_REAL_API) {
+    await delay(300);
+    return (merchantName ? mockReceipts[merchantName] : undefined) ?? mockReceipts["Café de Jaren"] ?? mockReceipts["Default"];
+  }
+  return apiFetch<ParsedReceipt>('/receipts/parse', {
+    method: 'POST',
+    body: JSON.stringify({ image_uri: _imageUri }),
+  });
 }
 
 // ─── Split creation ───────────────────────────────────────────────
@@ -235,6 +249,122 @@ export async function parseSplitFromTranscript(
     rawResponse: data.response,
     unparsedTranscript: transcript,
   };
+}
+
+// ─── Profile ──────────────────────────────────────────────────────
+
+const PROFILE_INSIGHTS_PROMPT =
+  'Based on my recent transactions and split history, give me 3-4 short bullet points about my spending patterns and habits. Be specific (mention real merchant names, contacts, or amounts when possible). Keep each bullet under 15 words. Format as plain text with one bullet per line, starting with "•".';
+
+export async function getMe(): Promise<BunqUser | null> {
+  if (!USE_REAL_API) {
+    await delay(300);
+    return { id: mockUser.id, name: mockUser.name, email: mockUser.email, iban: 'NL12BUNQ0123456789' };
+  }
+  try {
+    return await apiFetch<BunqUser>('/users/me');
+  } catch {
+    return null;
+  }
+}
+
+export async function getMonetaryAccounts(): Promise<MonetaryAccount[]> {
+  if (!USE_REAL_API) {
+    await delay(300);
+    return [{ id: 'acc-1', description: 'Main', balance: 234567, currency: 'EUR' }];
+  }
+  return apiFetch<MonetaryAccount[]>('/monetary-accounts');
+}
+
+// TODO: CONFIRM-BACKEND — bunq /request_inqs response shape; field names may differ
+export async function getNetBalance(): Promise<{ owedToYou: number; youOwe: number }> {
+  if (!USE_REAL_API) {
+    await delay(300);
+    return { owedToYou: 4750, youOwe: 0 };
+  }
+  type Inquiry = { type: string; status: string; amount_inquired: { value: string } };
+  const data = await apiFetch<Inquiry[]>('/request_inqs');
+  const owedToYou = data
+    .filter(r => r.type === 'payee' && r.status === 'pending')
+    .reduce((sum, r) => sum + Math.round(parseFloat(r.amount_inquired.value) * 100), 0);
+  const youOwe = data
+    .filter(r => r.type === 'payer' && r.status === 'pending')
+    .reduce((sum, r) => sum + Math.round(parseFloat(r.amount_inquired.value) * 100), 0);
+  return { owedToYou, youOwe };
+}
+
+export async function getProfileInsights(): Promise<{ response: string }> {
+  if (!USE_REAL_MCP) {
+    await delay(800);
+    return {
+      response:
+        '• You spend most on Fridays at Café de Jaren\n• Tom owes you €15 from last week\'s bar\n• Average split is around €25 per person',
+    };
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  let res: Response;
+  try {
+    res = await fetch(`${MCP_BASE}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query: PROFILE_INSIGHTS_PROMPT }),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(timeout);
+    throw err;
+  }
+  clearTimeout(timeout);
+  if (!res.ok) throw new Error(`Profile insights failed: ${res.status}`);
+  return res.json();
+}
+
+// ─── Agent chat ───────────────────────────────────────────────────
+
+export async function askAgent(query: string): Promise<{ response: string }> {
+  if (!USE_REAL_MCP) {
+    await delay(800);
+    return { response: mockAgentResponse(query) };
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+
+  let res: Response;
+  try {
+    res = await fetch(`${MCP_BASE}/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query }),
+      signal: controller.signal,
+    });
+  } catch (err: any) {
+    clearTimeout(timeout);
+    if (err?.name === 'AbortError') throw new Error('Agent request timed out after 45s');
+    throw err;
+  }
+  clearTimeout(timeout);
+
+  if (!res.ok) throw new Error(`Agent request failed: ${res.status}`);
+  return res.json();
+}
+
+function mockAgentResponse(query: string): string {
+  const q = query.toLowerCase();
+  if (q.includes('spend') || q.includes('spent')) {
+    return "You spent €432.50 across 18 transactions this month. Most was on dining (€187), followed by bars (€94) and transport (€51).";
+  }
+  if (q.includes('owe') || q.includes('owes')) {
+    return "Tom owes you €15.00 from the Café de Jaren split. Anna and Jeremy are squared up.";
+  }
+  if (q.includes('split')) {
+    return "I've sent payment requests for €15.00 each to Tom and Anna for last night's bar tab. You'll get notified when they pay.";
+  }
+  if (q.includes('remind')) {
+    return "I sent a friendly reminder to Tom about the €15.00 from Café de Jaren. Fingers crossed!";
+  }
+  return `Let me think about that… "${query}" — I'm checking your transaction history and will have an answer shortly. (Mock mode — connect MCP for real answers.)`;
 }
 
 function buildMcpQuery(transcript: string, context: ParseContext): string {

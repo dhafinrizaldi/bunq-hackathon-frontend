@@ -1,5 +1,8 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { theme } from '../theme/theme';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { theme, accentForKey } from '../theme/theme';
+import { Money } from './ui/Money';
+import { Text } from './ui/Text';
+import { CategoryIcon } from './ui/CategoryIcon';
 import type { PendingSplit } from '../types/types';
 
 interface PendingSplitRowProps {
@@ -16,34 +19,34 @@ function formatRelativeDate(iso: string): string {
   return `${date.getDate()} ${months[date.getMonth()]}`;
 }
 
-function formatCents(cents: number, currency: string): string {
-  const symbol = currency === 'EUR' ? '€' : currency;
-  return `${symbol}${(cents / 100).toFixed(2)}`;
-}
-
 export function PendingSplitRow({ split, onPress }: PendingSplitRowProps) {
   const paidCount = split.participants.filter(p => p.status === 'paid').length;
   const total = split.participants.length;
   const isComplete = split.isFullyPaid || paidCount === total;
+  const accent = accentForKey(split.merchantName);
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        isComplete && styles.cardComplete,
         pressed && styles.cardPressed,
       ]}
       onPress={() => onPress(split)}
     >
-      <View style={styles.row}>
-        <Text style={styles.merchantName}>{split.merchantName}</Text>
-        <Text style={styles.amount}>{formatCents(split.totalAmount, split.currency)}</Text>
-      </View>
-      <View style={styles.row}>
-        <Text style={styles.progress}>
-          {isComplete ? 'All paid' : `${paidCount} of ${total} paid`}
+      <CategoryIcon
+        initials={split.merchantName.slice(0, 2)}
+        accent={accent}
+        size={44}
+      />
+      <View style={styles.middle}>
+        <Text variant="bodyStrong" color="primary" numberOfLines={1}>{split.merchantName}</Text>
+        <Text variant="label" color={isComplete ? 'tertiary' : 'secondary'}>
+          {isComplete ? 'All paid ✓' : `${paidCount} of ${total} paid`}
         </Text>
-        <Text style={styles.date}>{formatRelativeDate(split.createdAt)}</Text>
+      </View>
+      <View style={styles.right}>
+        <Money amountCents={split.totalAmount} currency={split.currency} size="small" color={isComplete ? 'primary' : accent} />
+        <Text variant="micro" color="tertiary">{formatRelativeDate(split.createdAt)}</Text>
       </View>
     </Pressable>
   );
@@ -51,39 +54,24 @@ export function PendingSplitRow({ split, onPress }: PendingSplitRowProps) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: theme.colors.surface,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.colors.bgRaised,
     borderRadius: theme.radii.lg,
     padding: theme.spacing.base,
-    borderLeftWidth: 3,
-    borderLeftColor: theme.colors.accentPrimary,
+    gap: theme.spacing.md,
     marginBottom: theme.spacing.sm,
-    gap: theme.spacing.xs,
-  },
-  cardComplete: {
-    borderLeftColor: theme.colors.border,
   },
   cardPressed: {
     opacity: 0.75,
+    transform: [{ scale: 0.985 }],
   },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  middle: {
+    flex: 1,
+    gap: 3,
   },
-  merchantName: {
-    ...theme.typography.bodyStrong,
-    color: theme.colors.textPrimary,
-  },
-  amount: {
-    ...theme.typography.moneySmall,
-    color: theme.colors.textPrimary,
-  },
-  progress: {
-    ...theme.typography.label,
-    color: theme.colors.textSecondary,
-  },
-  date: {
-    ...theme.typography.micro,
-    color: theme.colors.textTertiary,
+  right: {
+    alignItems: 'flex-end',
+    gap: 3,
   },
 });

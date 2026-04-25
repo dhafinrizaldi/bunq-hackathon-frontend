@@ -1,6 +1,7 @@
-import { useState } from 'react';
-import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
-import { theme } from '../theme/theme';
+import { View, Pressable, StyleSheet } from 'react-native';
+import { theme, accentForKey } from '../theme/theme';
+import { Text } from './ui/Text';
+import { CategoryIcon } from './ui/CategoryIcon';
 import type { Contact } from '../types/types';
 
 interface ContactCardProps {
@@ -10,33 +11,28 @@ interface ContactCardProps {
 }
 
 export function ContactCard({ contact, selected, onPress }: ContactCardProps) {
-  const [imageError, setImageError] = useState(false);
+  const accent = accentForKey(contact.name);
+  const tint = theme.colors.accentTints[accent];
 
   return (
     <Pressable
       style={({ pressed }) => [
         styles.card,
-        selected && styles.cardSelected,
+        selected && { backgroundColor: tint, borderColor: theme.colors.accents[accent], borderWidth: 1.5 },
         pressed && styles.cardPressed,
       ]}
       onPress={onPress}
     >
-      <View style={styles.avatarContainer}>
-        {!imageError ? (
-          <Image
-            source={{ uri: contact.avatarUrl }}
-            style={styles.avatar}
-            onError={() => setImageError(true)}
-          />
-        ) : (
-          <View style={[styles.avatar, styles.avatarFallback]}>
-            <Text style={styles.avatarInitial}>{contact.name.charAt(0).toUpperCase()}</Text>
-          </View>
-        )}
-      </View>
-      <Text style={styles.name} numberOfLines={1}>{contact.name.split(' ')[0]}</Text>
+      <CategoryIcon
+        initials={contact.name.slice(0, 2)}
+        accent={accent}
+        size={52}
+      />
+      <Text variant="micro" color="primary" style={styles.name} numberOfLines={1}>
+        {contact.name.split(' ')[0]}
+      </Text>
       {contact.distanceMeters !== undefined && (
-        <Text style={styles.distance}>~{contact.distanceMeters}m</Text>
+        <Text variant="micro" color="tertiary">~{contact.distanceMeters}m</Text>
       )}
     </Pressable>
   );
@@ -51,42 +47,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.xs,
     marginRight: theme.spacing.sm,
-  },
-  cardSelected: {
-    backgroundColor: theme.colors.accentSubtle,
     borderWidth: 1.5,
-    borderColor: theme.colors.accentPrimary,
+    borderColor: 'transparent',
   },
   cardPressed: {
     opacity: 0.8,
   },
-  avatarContainer: {
-    width: 52,
-    height: 52,
-    borderRadius: theme.radii.full,
-    overflow: 'hidden',
-  },
-  avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: theme.radii.full,
-  },
-  avatarFallback: {
-    backgroundColor: theme.colors.bgElevated,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    ...theme.typography.heading,
-    color: theme.colors.textPrimary,
-  },
   name: {
-    ...theme.typography.micro,
-    color: theme.colors.textPrimary,
     textAlign: 'center',
-  },
-  distance: {
-    ...theme.typography.micro,
-    color: theme.colors.textTertiary,
   },
 });

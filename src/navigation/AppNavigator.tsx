@@ -5,7 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme/theme';
 import { SplitFlowProvider } from '../context/SplitFlowContext';
 import HomeScreen from '../screens/HomeScreen';
-import ActivityScreen from '../screens/ActivityScreen';
+import AgentScreen from '../screens/AgentScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import SplitModeScreen from '../screens/SplitModeScreen';
 import ContactPickerScreen from '../screens/ContactPickerScreen';
@@ -26,8 +26,8 @@ const SplitStack = createNativeStackNavigator<SplitFlowParamList>();
 type IoniconsName = React.ComponentProps<typeof Ionicons>['name'];
 
 const TAB_ICONS: Record<keyof TabParamList, IoniconsName> = {
-  Home: 'home-outline',
-  Activity: 'list-outline',
+  Home:    'home-outline',
+  Agent:   'sparkles-outline',
   Profile: 'person-outline',
 };
 
@@ -53,14 +53,14 @@ function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
+          backgroundColor: theme.colors.bgRaised,
           borderTopColor: theme.colors.border,
           borderTopWidth: 1,
           height: 60,
           paddingBottom: 8,
         },
-        tabBarActiveTintColor: theme.colors.accentPrimary,
-        tabBarInactiveTintColor: theme.colors.textSecondary,
+        tabBarActiveTintColor: theme.colors.accents.cyan,
+        tabBarInactiveTintColor: theme.colors.textTertiary,
         tabBarIcon: ({ color, size }: { color: string; size: number }) => (
           <Ionicons
             name={TAB_ICONS[route.name as keyof TabParamList]}
@@ -71,7 +71,11 @@ function MainTabs() {
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Activity" component={ActivityScreen} />
+      <Tab.Screen
+        name="Agent"
+        component={AgentScreen}
+        options={{ tabBarLabel: 'Ask' }}
+      />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

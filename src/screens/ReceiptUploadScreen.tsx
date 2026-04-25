@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   Pressable,
   Image,
@@ -19,6 +18,8 @@ import * as api from '../api/client';
 import { useSplitFlow } from '../context/SplitFlowContext';
 import { FlowHeader } from '../components/FlowHeader';
 import { TransactionSummaryCard } from '../components/TransactionSummaryCard';
+import { Text } from '../components/ui/Text';
+import { Button } from '../components/ui/Button';
 
 type Props = NativeStackScreenProps<SplitFlowParamList, 'ReceiptUpload'>;
 
@@ -28,7 +29,6 @@ export default function ReceiptUploadScreen({ navigation, route }: Props) {
 
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [imageUri, setImageUri] = useState<string | null>(null);
-  const [scanning, setScanning] = useState(false);
   const [scanPhase, setScanPhase] = useState<'idle' | 'scanning' | 'assign_mode_chooser'>('idle');
   const [permissionError, setPermissionError] = useState<string | null>(null);
   const isMounted = useRef(true);
@@ -56,19 +56,20 @@ export default function ReceiptUploadScreen({ navigation, route }: Props) {
     setImageUri(uri);
     setPermissionError(null);
     dispatch({ type: 'SET_RECEIPT_IMAGE', uri });
-    setScanning(true);
     setScanPhase('scanning');
-    // Simulate OCR latency before calling the API
-    await new Promise(r => setTimeout(r, 1500));
-    const receipt = await api.parseReceipt(uri);
-    dispatch({ type: 'SET_ITEMS', items: receipt.items });
-    setScanning(false);
-    setScanPhase('assign_mode_chooser');
+    try {
+      await new Promise(r => setTimeout(r, 1500));
+      const receipt = await api.parseReceipt(uri, transaction?.merchantName);
+      dispatch({ type: 'SET_ITEMS', items: receipt.items });
+      setScanPhase('assign_mode_chooser');
+    } catch {
+      setScanPhase('idle');
+      setPermissionError('Could not read the receipt. Please try again.');
+    }
   };
 
   const handleTakePhoto = async () => {
     setPermissionError(null);
-    // TODO: PERMISSIONS — request camera permission on tap, not on mount
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') {
       setPermissionError('Camera access is required to take a photo.');
@@ -79,13 +80,12 @@ export default function ReceiptUploadScreen({ navigation, route }: Props) {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      processImage(result.assets[0].uri);
+      await processImage(result.assets[0].uri);
     }
   };
 
   const handleChooseFromLibrary = async () => {
     setPermissionError(null);
-    // TODO: PERMISSIONS — request media library permission on tap, not on mount
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       setPermissionError('Photo library access is required to choose a photo.');
@@ -96,7 +96,7 @@ export default function ReceiptUploadScreen({ navigation, route }: Props) {
       quality: 0.8,
     });
     if (!result.canceled && result.assets[0]) {
-      processImage(result.assets[0].uri);
+      await processImage(result.assets[0].uri);
     }
   };
 
@@ -124,68 +124,66 @@ export default function ReceiptUploadScreen({ navigation, route }: Props) {
           <View style={styles.previewContainer}>
             <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="contain" />
             <View style={styles.scanningRow}>
-              <ActivityIndicator color={theme.colors.accentPrimary} size="small" />
-              <Text style={styles.scanningText}>Reading receipt...</Text>
+              <ActivityIndicator color={theme.colors.accents.cyan} size="small" />
+              <Text variant="label" color="secondary">Reading receipt...</Text>
             </View>
           </View>
         ) : scanPhase === 'assign_mode_chooser' && imageUri ? (
-          <>
+          <View style={styles.chooserContainer}>
             <Image source={{ uri: imageUri }} style={styles.previewImageSmall} resizeMode="contain" />
-            <Text style={styles.chooserTitle}>Items read — how would you like to assign them?</Text>
-            <Pressable
-              style={({ pressed }) => [styles.secondaryButton, { opacity: pressed ? 0.85 : 1 }]}
+            <Text variant="bodyStrong" color="primary" style={styles.chooserTitle}>
+              Items read — how would you like to assign them?
+            </Text>
+            <Button
+              label="✓  Tap to assign items"
               onPress={() => navigation.navigate('ItemAssignment')}
-            >
-              <Ionicons name="checkmark-circle-outline" size={18} color={theme.colors.textPrimary} />
-              <Text style={styles.secondaryButtonText}>Tap to assign items</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [styles.voiceButton, { opacity: pressed ? 0.85 : 1 }]}
+              variant="secondary"
+            />
+            <Button
+              label="🎙  Speak to assign items"
               onPress={() => navigation.navigate('VoiceRecord', { mode: 'specify', transactionId })}
-            >
-              <Text style={styles.secondaryButtonText}>🎙 Speak to assign items</Text>
-            </Pressable>
+              variant="accent"
+              accent="cyan"
+            />
             <Pressable
               style={({ pressed }) => [styles.skipLink, { opacity: pressed ? 0.6 : 1 }]}
               onPress={() => setScanPhase('idle')}
             >
-              <Text style={styles.skipText}>Cancel — go back to receipt</Text>
+              <Text variant="label" color="tertiary">Cancel — go back to receipt</Text>
             </Pressable>
-          </>
+          </View>
         ) : (
-          <>
+          <View style={styles.uploadContainer}>
             <View style={styles.dropzone}>
-              <Ionicons name="camera-outline" size={40} color={theme.colors.accentPrimary} />
-              <Text style={styles.dropzoneText}>Take photo of receipt</Text>
+              <Ionicons name="camera-outline" size={40} color={theme.colors.accents.cyan} />
+              <Text variant="body" color="secondary">Take photo of receipt</Text>
             </View>
 
             {permissionError && (
-              <Text style={styles.permissionError}>{permissionError}</Text>
+              <Text variant="label" color="negative" style={styles.errorText}>{permissionError}</Text>
             )}
 
-            <Pressable
-              style={({ pressed }) => [styles.primaryButton, { opacity: pressed ? 0.85 : 1 }]}
+            <Button
+              label="Take photo"
               onPress={handleTakePhoto}
-            >
-              <Ionicons name="camera" size={18} color="#0A0A0A" />
-              <Text style={styles.primaryButtonText}>Take photo</Text>
-            </Pressable>
+              variant="accent"
+              accent="cyan"
+            />
 
-            <Pressable
-              style={({ pressed }) => [styles.secondaryButton, { opacity: pressed ? 0.85 : 1 }]}
+            <Button
+              label="Choose from library"
               onPress={handleChooseFromLibrary}
-            >
-              <Ionicons name="images-outline" size={18} color={theme.colors.textPrimary} />
-              <Text style={styles.secondaryButtonText}>Choose from library</Text>
-            </Pressable>
+              variant="secondary"
+              style={styles.secondaryBtn}
+            />
 
             <Pressable
               style={({ pressed }) => [styles.skipLink, { opacity: pressed ? 0.6 : 1 }]}
               onPress={handleSkip}
             >
-              <Text style={styles.skipText}>Skip — enter items manually</Text>
+              <Text variant="label" color="tertiary">Skip — enter items manually</Text>
             </Pressable>
-          </>
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -195,7 +193,7 @@ export default function ReceiptUploadScreen({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: theme.colors.bgBase,
   },
   scroll: {
     flex: 1,
@@ -204,68 +202,31 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     paddingBottom: theme.spacing.xxl,
   },
+  uploadContainer: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.base,
+  },
   dropzone: {
-    borderWidth: 2,
+    borderWidth: 1.5,
     borderStyle: 'dashed',
-    borderColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.card,
+    borderColor: theme.colors.bgElevated,
+    borderRadius: theme.radii.lg,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: theme.spacing.xxl * 2,
-    marginTop: theme.spacing.base,
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing.base,
     gap: theme.spacing.sm,
   },
-  dropzoneText: {
-    color: theme.colors.textSecondary,
-    fontSize: 15,
-  },
-  permissionError: {
-    color: theme.colors.negative,
-    fontSize: 13,
+  errorText: {
     textAlign: 'center',
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
-  primaryButton: {
-    backgroundColor: theme.colors.accentPrimary,
-    borderRadius: theme.radii.button,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
-    minHeight: 48,
-    marginBottom: theme.spacing.sm,
-  },
-  primaryButtonText: {
-    color: '#0A0A0A',
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.bold,
-  },
-  secondaryButton: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.button,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
-    minHeight: 48,
-    marginBottom: theme.spacing.lg,
-  },
-  secondaryButtonText: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.semibold,
+  secondaryBtn: {
+    marginTop: 0,
   },
   skipLink: {
     alignItems: 'center',
     paddingVertical: theme.spacing.sm,
-  },
-  skipText: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
-    textDecorationLine: 'underline',
   },
   previewContainer: {
     marginTop: theme.spacing.base,
@@ -275,44 +236,27 @@ const styles = StyleSheet.create({
   previewImage: {
     width: '100%',
     height: 200,
-    borderRadius: theme.radii.card,
-    backgroundColor: theme.colors.surface,
+    borderRadius: theme.radii.lg,
+    backgroundColor: theme.colors.bgRaised,
+  },
+  chooserContainer: {
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.base,
   },
   previewImageSmall: {
     width: '100%',
     height: 100,
-    borderRadius: theme.radii.card,
-    backgroundColor: theme.colors.surface,
-    marginTop: theme.spacing.base,
-    marginBottom: theme.spacing.sm,
+    borderRadius: theme.radii.lg,
+    backgroundColor: theme.colors.bgRaised,
+    marginBottom: theme.spacing.xs,
   },
   chooserTitle: {
-    color: theme.colors.textPrimary,
-    fontSize: 16,
-    fontWeight: theme.fonts.weights.semibold,
     textAlign: 'center',
-    marginBottom: theme.spacing.sm,
-  },
-  voiceButton: {
-    backgroundColor: theme.colors.surface,
-    borderRadius: theme.radii.button,
-    borderWidth: 1.5,
-    borderColor: theme.colors.accentPrimary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-    paddingVertical: theme.spacing.md,
-    minHeight: 48,
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.xs,
   },
   scanningRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-  },
-  scanningText: {
-    color: theme.colors.textSecondary,
-    fontSize: 14,
   },
 });

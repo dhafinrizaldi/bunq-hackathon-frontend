@@ -1,8 +1,10 @@
 const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY;
 const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/audio/transcriptions';
 
-console.log('[stt] api key present:', !!process.env.EXPO_PUBLIC_GROQ_API_KEY);
-console.log('[stt] api key length:', process.env.EXPO_PUBLIC_GROQ_API_KEY?.length);
+if (__DEV__) {
+  console.log('[stt] api key present:', !!process.env.EXPO_PUBLIC_GROQ_API_KEY);
+  console.log('[stt] api key length:', process.env.EXPO_PUBLIC_GROQ_API_KEY?.length);
+}
 
 export interface TranscriptionResult {
   transcript: string;

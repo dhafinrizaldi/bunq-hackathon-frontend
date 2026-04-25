@@ -7,13 +7,15 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../navigation/types';
 import { loginUser } from '../api/client';
+import { theme } from '../theme/theme';
+import { Text } from '../components/ui/Text';
+import { RainbowStripe } from '../components/ui/RainbowStripe';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
 
@@ -45,20 +47,20 @@ export default function LoginPage({ navigation }: Props) {
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
 
       <View style={styles.header}>
-        <View style={styles.logoMark} />
-        <Text style={styles.brand}>bunq</Text>
-        <Text style={styles.tagline}>Money without borders</Text>
+        <RainbowStripe height={4} style={styles.stripe} />
+        <Text variant="hero" color="primary" style={styles.brand}>bunq</Text>
+        <Text variant="label" color="tertiary">split</Text>
       </View>
 
       <View style={styles.form}>
-        <Text style={styles.label}>Email</Text>
+        <Text variant="micro" color="tertiary" style={styles.fieldLabel}>EMAIL</Text>
         <TextInput
           style={styles.input}
           placeholder="you@example.com"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={theme.colors.textTertiary}
           keyboardType="email-address"
           autoCapitalize="none"
           autoCorrect={false}
@@ -66,11 +68,11 @@ export default function LoginPage({ navigation }: Props) {
           onChangeText={setEmail}
         />
 
-        <Text style={styles.label}>Password</Text>
+        <Text variant="micro" color="tertiary" style={[styles.fieldLabel, styles.fieldLabelGap]}>PASSWORD</Text>
         <TextInput
           style={styles.input}
           placeholder="••••••••"
-          placeholderTextColor="#aaa"
+          placeholderTextColor={theme.colors.textTertiary}
           secureTextEntry
           value={password}
           onChangeText={setPassword}
@@ -82,115 +84,76 @@ export default function LoginPage({ navigation }: Props) {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#000" />
           ) : (
-            <Text style={styles.buttonText}>Log in</Text>
+            <Text variant="bodyStrong" color="inverse">Log in</Text>
           )}
-        </Pressable>
-
-        <Pressable style={styles.forgotWrapper}>
-          <Text style={styles.forgotText}>Forgot password?</Text>
         </Pressable>
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerText}>Don't have an account? </Text>
+        <Text variant="label" color="tertiary">Don't have an account? </Text>
         <Pressable onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.footerLink}>Sign up</Text>
+          <Text variant="labelStrong" color="primary">Sign up</Text>
         </Pressable>
       </View>
     </KeyboardAvoidingView>
   );
 }
 
-const BUNQ_GREEN = '#00D48A';
-
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    paddingHorizontal: 28,
+    backgroundColor: theme.colors.bgBase,
+    paddingHorizontal: theme.spacing.xl,
     justifyContent: 'center',
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: theme.spacing.xxl + theme.spacing.base,
+    gap: theme.spacing.xs,
   },
-  logoMark: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: BUNQ_GREEN,
-    marginBottom: 12,
+  stripe: {
+    borderRadius: theme.radii.full,
+    marginBottom: theme.spacing.base,
+    width: 48,
+    height: 4,
   },
   brand: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: '#111',
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 14,
-    color: '#888',
-    marginTop: 4,
+    letterSpacing: -1,
   },
   form: {
-    gap: 6,
+    gap: theme.spacing.xs,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#444',
-    marginBottom: 2,
-    marginTop: 12,
+  fieldLabel: {
+    marginBottom: theme.spacing.xs,
+  },
+  fieldLabelGap: {
+    marginTop: theme.spacing.base,
   },
   input: {
-    height: 50,
-    borderWidth: 1.5,
-    borderColor: '#E5E5E5',
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    height: 52,
+    backgroundColor: theme.colors.bgRaised,
+    borderRadius: theme.radii.md,
+    paddingHorizontal: theme.spacing.base,
     fontSize: 16,
-    color: '#111',
-    backgroundColor: '#FAFAFA',
+    color: theme.colors.textPrimary,
+    marginBottom: theme.spacing.xs,
   },
   button: {
-    height: 52,
-    backgroundColor: BUNQ_GREEN,
-    borderRadius: 14,
+    height: 56,
+    backgroundColor: theme.colors.accents.cyan,
+    borderRadius: theme.radii.full,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 24,
+    marginTop: theme.spacing.base,
   },
   buttonPressed: {
     opacity: 0.85,
   },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.2,
-  },
-  forgotWrapper: {
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  forgotText: {
-    fontSize: 14,
-    color: '#888',
-  },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 48,
-  },
-  footerText: {
-    fontSize: 14,
-    color: '#888',
-  },
-  footerLink: {
-    fontSize: 14,
-    color: BUNQ_GREEN,
-    fontWeight: '600',
+    marginTop: theme.spacing.xxl,
   },
 });
